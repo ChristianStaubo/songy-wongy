@@ -1,0 +1,54 @@
+FROM node:20-alpine AS base
+
+# Ensure native builds succeed and turbo is available
+RUN apk add -f --update --no-cache --virtual .gyp python3 make g++ bash \
+  && yarn global add turbo \
+  && apk del .gyp
+
+WORKDIR /app
+
+#############################################
+FROM base AS pruned
+WORKDIR /app
+ARG APP
+
+COPY . .
+
+# Prune workspace for the target app
+RUN turbo prune --scope=$APP --docker
+
+#############################################
+FROM base AS installer
+WORKDIR /app
+ARG APP
+
+# Bring in pruned workspace manifests
+COPY --from=pruned /app/out/json/ .
+COPY --from=pruned /app/out/yarn.lock /app/yarn.lock
+
+# Force layer change when app package.json changes
+COPY apps/${APP}/package.json /app/apps/${APP}/package.json
+
+# Install deps (use cache mount for yarn)
+RUN yarn --prefer-offline --frozen-lockfile
+
+# Bring full sources needed for the pruned workspace
+COPY --from=pruned /app/out/full/ .
+COPY turbo.json turbo.json
+
+# Build dependencies of the app, not the app itself (speed up dev)
+RUN turbo run build --no-cache --filter=${APP}^...
+
+# Re-run yarn to ensure workspace links are correct
+RUN yarn --prefer-offline --frozen-lockfile
+
+#############################################
+FROM base AS runner
+WORKDIR /app
+ARG APP
+ARG START_COMMAND=dev
+
+COPY --from=installer /app .
+
+# Run the app workspace in dev (watch) mode
+CMD yarn workspace ${APP} ${START_COMMAND}
