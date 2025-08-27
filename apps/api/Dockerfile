@@ -33,6 +33,9 @@ WORKDIR /app
 COPY --from=installer /app/ .
 COPY --from=pruner /app/out/full/ .
 
+# Generate Prisma client for the target platform
+RUN yarn workspace api prisma:generate
+
 # Build with increased memory limit
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN yarn turbo run build --filter=api

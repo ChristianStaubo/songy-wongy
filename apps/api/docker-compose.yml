@@ -50,7 +50,6 @@ services:
     command: yarn workspace api start:dev
     volumes:
       - ../../:/app
-      - api_node_modules:/app/node_modules
 
     networks:
       - songy_wongy_net
@@ -61,4 +60,3 @@ networks:
 
 volumes:
   postgres_data:
-  api_node_modules:

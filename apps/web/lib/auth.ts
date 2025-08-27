@@ -42,3 +42,14 @@ export async function getCurrentUser() {
   }
 }
 
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  database: {
+    provider: "pg",
+    url: process.env.DATABASE_URL as string,
+  },
+  emailAndPassword: { enabled: true },
+  secret: process.env.BETTER_AUTH_SECRET as string,
+  baseURL: process.env.BETTER_AUTH_URL || "http://localhost:8000",
+});
