@@ -12,14 +12,9 @@ import {
 interface CreditsSectionProps {
   credits: number;
   songsCount: number;
-  onPurchaseCredits: () => void;
 }
 
-export function CreditsSection({
-  credits,
-  songsCount,
-  onPurchaseCredits,
-}: CreditsSectionProps) {
+export function CreditsSection({ credits, songsCount }: CreditsSectionProps) {
   return (
     <div className="space-y-6">
       <Card>
@@ -35,11 +30,7 @@ export function CreditsSection({
             <div className="text-sm text-gray-600">credits remaining</div>
           </div>
 
-          <Button
-            onClick={onPurchaseCredits}
-            className="w-full bg-red-600 hover:bg-red-700"
-            size="lg"
-          >
+          <Button className="w-full bg-red-600 hover:bg-red-700" size="lg">
             Buy 10 Credits - $9.99
           </Button>
 

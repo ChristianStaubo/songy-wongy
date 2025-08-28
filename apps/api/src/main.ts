@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { TransformInterceptor } from './common/interceptors/transform-interceptor';
 import { VersioningType } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
@@ -30,9 +31,20 @@ async function bootstrap() {
     .setTitle('Songy-Wongy API')
     .setDescription('Songy-Wongy API')
     .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'JWT',
+        description: 'Enter your Clerk JWT token',
+        in: 'header',
+      },
+      'JWT-auth', // This name should match the string passed to @ApiBearerAuth() in your controllers
+    )
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  SwaggerModule.setup('api', app, cleanupOpenApiDoc(document));
   app.useLogger(app.get(Logger));
 
   // app.useGlobalPipes(

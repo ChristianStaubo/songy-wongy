@@ -23,6 +23,7 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   posts     Post[]
+  music     Music[]
 }
 
 model Post {
@@ -34,4 +35,30 @@ model Post {
   author    User     @relation(fields: [authorId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Music {
+  id       String      @id @default(cuid())
+  name     String // User-provided name for the music
+  prompt   String // The original prompt used to generate the music
+  audioUrl String // S3 URL to the MP3 file
+  lengthMs Int // Length of the music in milliseconds
+  status   MusicStatus @default(GENERATING)
+
+  // User relationship
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+enum MusicStatus {
+  GENERATING // Currently being generated
+  COMPLETED // Successfully generated and uploaded
+  FAILED // Generation or upload failed
 }

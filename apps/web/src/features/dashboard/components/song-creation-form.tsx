@@ -12,20 +12,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 interface SongCreationFormProps {
-  songPrompt: string;
-  setSongPrompt: (prompt: string) => void;
   credits: number;
-  isGenerating: boolean;
-  onSubmit: (e: React.FormEvent) => void;
 }
 
-export function SongCreationForm({
-  songPrompt,
-  setSongPrompt,
-  credits,
-  isGenerating,
-  onSubmit,
-}: SongCreationFormProps) {
+export function SongCreationForm({ credits }: SongCreationFormProps) {
   return (
     <Card>
       <CardHeader>
@@ -37,15 +27,12 @@ export function SongCreationForm({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form className="space-y-4">
           <div>
             <Label htmlFor="prompt">Song Description</Label>
             <Input
               id="prompt"
               placeholder="e.g., A happy pop song about summer vacation"
-              value={songPrompt}
-              onChange={(e) => setSongPrompt(e.target.value)}
-              disabled={isGenerating}
               className="mt-1"
             />
           </div>
@@ -55,10 +42,10 @@ export function SongCreationForm({
             </div>
             <Button
               type="submit"
-              disabled={isGenerating || credits < 1 || !songPrompt.trim()}
+              disabled={credits < 1}
               className="min-w-[120px] bg-red-600 hover:bg-red-700"
             >
-              {isGenerating ? "Creating..." : "Create Song"}
+              Create Song
             </Button>
           </div>
           {credits < 1 && (

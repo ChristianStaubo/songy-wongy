@@ -6,10 +6,9 @@ import { Song } from "../types/dashboard-types";
 
 interface SongLibraryProps {
   songs: Song[];
-  onDeleteSong: (songId: number) => void;
 }
 
-export function SongLibrary({ songs, onDeleteSong }: SongLibraryProps) {
+export function SongLibrary({ songs }: SongLibraryProps) {
   if (songs.length === 0) {
     return (
       <Card>
@@ -56,12 +55,7 @@ export function SongLibrary({ songs, onDeleteSong }: SongLibraryProps) {
               >
                 ⬇️ Download
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onDeleteSong(song.id)}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50 hover:border-red-200"
-              >
+              <Button size="sm" variant="outline">
                 🗑️
               </Button>
             </div>
