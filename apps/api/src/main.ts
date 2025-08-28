@@ -1,9 +1,24 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { TransformInterceptor } from './common/interceptors/transform-interceptor';
+import { VersioningType } from '@nestjs/common';
+import { Logger } from 'nestjs-pino';
+import * as bodyParser from 'body-parser';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  const app = await NestFactory.create(AppModule, { 
+    bodyParser: false // Disable default body parsing
+  });
+
+  // Configure JSON body parser for most routes
+  app.use(bodyParser.json());
+  
+  // Configure raw body parser specifically for webhook endpoints
+  app.use(
+    '/api/v1/webhooks/auth',
+    bodyParser.raw({ type: 'application/json' }),
+  );
 
   // Swagger API documentation
   const config = new DocumentBuilder()
@@ -13,6 +28,26 @@ async function bootstrap() {
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
+
+  app.setGlobalPrefix('api');
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: '1',
+  });
+  app.useLogger(app.get(Logger));
+
+  // app.useGlobalPipes(
+  //   new ValidationPipe({
+  //     transform: true,
+  //     transformOptions: {
+  //       enableImplicitConversion: true,
+  //     },
+  //     whitelist: true,
+  //     forbidNonWhitelisted: true,
+  //   }),
+  // );
+
+  app.useGlobalInterceptors(new TransformInterceptor());
 
   await app.listen(process.env.PORT ?? 8000);
 }
