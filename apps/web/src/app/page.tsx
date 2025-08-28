@@ -1,20 +1,19 @@
 "use client";
 
-import Image from "next/image";
-import { CreateProduct } from "@repo/types";
-import { useUser, useClerk } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export default function Home() {
-  const { isSignedIn, user, isLoaded } = useUser();
-  const { signOut } = useClerk();
+  const { isSignedIn, isLoaded } = useUser();
+  const router = useRouter();
 
-  // Test that we can use types from @repo/types
-  const exampleProduct: CreateProduct = {
-    name: "Test Product",
-    price: 29.99,
-    description: "This is a test product to verify @repo/types integration",
-    meow: "Meow meow!",
-  };
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      router.push("/dashboard");
+    }
+  }, [isLoaded, isSignedIn, router]);
 
   if (!isLoaded) {
     return (
@@ -23,142 +22,79 @@ export default function Home() {
       </div>
     );
   }
+
+  // Marketing landing page for non-authenticated users
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      {/* Auth Navigation */}
-      <nav className="row-start-1 w-full flex justify-between items-center">
-        <div className="text-lg font-semibold">Songy Wongy</div>
+    <div className="min-h-screen bg-gradient-to-br from-red-50 to-rose-50">
+      <nav className="w-full flex justify-between items-center p-6">
+        <div className="text-2xl font-bold text-red-600">🎵 Songy Wongy</div>
         <div className="flex gap-4 items-center">
-          {isSignedIn ? (
-            <>
-              <span className="text-sm text-gray-600">
-                Welcome,{" "}
-                {user.firstName ||
-                  user.emailAddresses?.[0]?.emailAddress ||
-                  "User"}
-                !
-              </span>
-              <button
-                onClick={() => signOut()}
-                className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
-              >
-                Sign Out
-              </button>
-            </>
-          ) : (
-            <>
-              <a
-                href="/sign-in"
-                className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
-              >
-                Sign In
-              </a>
-              <a
-                href="/sign-up"
-                className="px-4 py-2 text-sm border border-indigo-600 text-indigo-600 rounded-md hover:bg-indigo-50 transition-colors"
-              >
-                Sign Up
-              </a>
-            </>
-          )}
+          <a
+            href="/sign-in"
+            className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+          >
+            Sign In
+          </a>
+          <a
+            href="/sign-up"
+            className="px-4 py-2 text-sm border border-red-600 text-red-600 rounded-md hover:bg-red-50 transition-colors"
+          >
+            Sign Up
+          </a>
         </div>
       </nav>
 
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
+      <div className="flex flex-col items-center justify-center min-h-[80vh] text-center px-4">
+        <h1 className="text-5xl font-bold text-gray-900 mb-6">
+          Create Amazing Songs with AI 🎵
+        </h1>
+        <p className="text-xl text-gray-600 mb-8 max-w-2xl">
+          Turn your ideas into music! Just describe what you want and our AI
+          will generate a complete song with lyrics and audio.
+        </p>
+        <div className="flex gap-4">
           <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/sign-up"
+            className="px-8 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
+            Get Started Free
           </a>
           <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/sign-in"
+            className="px-8 py-3 border border-red-600 text-red-600 rounded-lg hover:bg-red-50 transition-colors font-semibold"
           >
-            Read our docs
+            Sign In
           </a>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        {/* Features Section */}
+        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl">
+          <div className="text-center">
+            <div className="text-4xl mb-4">🎤</div>
+            <h3 className="text-xl font-semibold mb-2">AI-Powered Creation</h3>
+            <p className="text-gray-600">
+              Just describe your song idea and watch our AI bring it to life
+              with lyrics and melody.
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="text-4xl mb-4">⚡</div>
+            <h3 className="text-xl font-semibold mb-2">Lightning Fast</h3>
+            <p className="text-gray-600">
+              Get your complete song in seconds, not hours. Perfect for quick
+              inspiration or professional projects.
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="text-4xl mb-4">💎</div>
+            <h3 className="text-xl font-semibold mb-2">Credit System</h3>
+            <p className="text-gray-600">
+              Pay only for what you create. 1 credit = 1 song. No subscriptions,
+              no hidden fees.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -7,18 +7,23 @@ import { Logger } from 'nestjs-pino';
 import * as bodyParser from 'body-parser';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { 
-    bodyParser: false // Disable default body parsing
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: false, // Disable default body parsing
   });
 
-  // Configure JSON body parser for most routes
-  app.use(bodyParser.json());
-  
-  // Configure raw body parser specifically for webhook endpoints
+  // Configure raw body parser specifically for webhook endpoints FIRST
   app.use(
-    '/api/v1/webhooks/auth',
+    '/api/v1/webhooks/auth/clerk',
     bodyParser.raw({ type: 'application/json' }),
   );
+  // Configure JSON body parser for all other routes
+  app.use(bodyParser.json());
+
+  app.setGlobalPrefix('api');
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: '1',
+  });
 
   // Swagger API documentation
   const config = new DocumentBuilder()
@@ -28,12 +33,6 @@ async function bootstrap() {
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
-
-  app.setGlobalPrefix('api');
-  app.enableVersioning({
-    type: VersioningType.URI,
-    defaultVersion: '1',
-  });
   app.useLogger(app.get(Logger));
 
   // app.useGlobalPipes(

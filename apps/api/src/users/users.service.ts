@@ -14,7 +14,7 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createUser(data: CreateUserDto) {
-    this.logger.log(`Creating user with Clerk ID: ${data.clerkId}`);
+    this.logger.log(`Creating user with Clerk ID: ${data.clerkId}, email: ${data.email}, name: ${data.name}`);
 
     try {
       const user = await this.prisma.user.create({
@@ -27,10 +27,16 @@ export class UsersService {
 
       this.logger.log(`Successfully created user with ID: ${user.id}`);
       return user;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(
         `Failed to create user with Clerk ID: ${data.clerkId}`,
-        error,
+        {
+          error: error.message,
+          code: error.code,
+          meta: error.meta,
+          constraint: error.constraint,
+          detail: error.detail,
+        }
       );
       throw error;
     }
@@ -74,6 +80,24 @@ export class UsersService {
       return user;
     } catch (error) {
       this.logger.error(`Failed to find user with ID: ${id}`, error);
+      throw error;
+    }
+  }
+
+  async getAllUsers() {
+    this.logger.log('Fetching all users');
+
+    try {
+      const users = await this.prisma.user.findMany({
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      this.logger.log(`Found ${users.length} users`);
+      return users;
+    } catch (error) {
+      this.logger.error('Failed to fetch all users', error);
       throw error;
     }
   }

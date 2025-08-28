@@ -106,14 +106,85 @@ export class AuthWebhooksController {
     this.logger.log(`Event data: ${JSON.stringify(data)}`);
 
     if (type === 'user.created') {
-      const { id: clerkId } = data;
+      const {
+        id: clerkId,
+        email_addresses,
+        unsafe_metadata,
+        primary_email_address_id,
+        first_name,
+        last_name,
+      } = data;
+
+      this.logger.log(`Extracting data for user creation:`);
+      this.logger.log(`- Clerk ID: ${clerkId}`);
+      this.logger.log(`- Email addresses: ${JSON.stringify(email_addresses)}`);
+      this.logger.log(
+        `- Primary email address ID: ${primary_email_address_id}`,
+      );
+      this.logger.log(`- Unsafe metadata: ${JSON.stringify(unsafe_metadata)}`);
+      this.logger.log(`- First name: ${first_name}`);
+      this.logger.log(`- Last name: ${last_name}`);
+
+      // Extract email from primary email address
+      const primaryEmail =
+        email_addresses?.find(
+          (email: any) => email.id === primary_email_address_id,
+        )?.email_address || email_addresses?.[0]?.email_address;
+
+      this.logger.log(`- Extracted primary email: ${primaryEmail}`);
+
+      // Extract name from unsafe_metadata (firstName + lastName) or use individual fields
+      let fullName = null;
+      if (unsafe_metadata?.firstName || unsafe_metadata?.lastName) {
+        const firstName = unsafe_metadata.firstName || '';
+        const lastName = unsafe_metadata.lastName || '';
+        fullName = `${firstName} ${lastName}`.trim() || null;
+        this.logger.log(`- Extracted name from unsafe_metadata: "${fullName}"`);
+      } else if (first_name || last_name) {
+        const firstName = first_name || '';
+        const lastName = last_name || '';
+        fullName = `${firstName} ${lastName}`.trim() || null;
+        this.logger.log(`- Extracted name from direct fields: "${fullName}"`);
+      } else {
+        this.logger.log(`- No name data found`);
+      }
+
+      this.logger.log(
+        `Final data to create user: clerkId="${clerkId}", email="${primaryEmail}", name="${fullName}"`,
+      );
+
       try {
-        await this.usersService.createUser({ clerkId });
+        // Check if user already exists first
+        const existingUser = await this.usersService.findUserByClerkId(clerkId);
+        if (existingUser) {
+          this.logger.log(
+            `User with Clerk ID ${clerkId} already exists, skipping creation`,
+          );
+          return;
+        }
+
+        // Validate required data
+        if (!clerkId) {
+          throw new Error('Clerk ID is required but not provided');
+        }
+
+        await this.usersService.createUser({
+          clerkId,
+          email: primaryEmail,
+          name: fullName,
+        });
         this.logger.log(
-          `Processed user.created event for Clerk user: ${clerkId}`,
+          `Processed user.created event for Clerk user: ${clerkId} with email: ${primaryEmail} and name: ${fullName}`,
         );
-      } catch (createErr) {
-        this.logger.error('Error creating user', createErr);
+      } catch (createErr: any) {
+        this.logger.error('Error creating user', {
+          error: createErr.message,
+          code: createErr.code,
+          meta: createErr.meta,
+          clerkId,
+          email: primaryEmail,
+          name: fullName,
+        });
       }
     } else {
       this.logger.log(`Unhandled event type: ${type}`);

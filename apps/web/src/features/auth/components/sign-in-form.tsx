@@ -47,7 +47,7 @@ export function SignInForm({
 
       if (result.status === "complete") {
         await setActive({ session: result.createdSessionId });
-        router.push("/");
+        router.push("/dashboard");
       } else {
         // Handle other statuses if needed (e.g., MFA)
         console.log("Sign in needs additional steps:", result.status);
