@@ -8,4 +8,3 @@ import { MusicGeneratorService } from './music-generator.service';
   exports: [MusicGeneratorService],
 })
 export class MusicGeneratorModule {}
-

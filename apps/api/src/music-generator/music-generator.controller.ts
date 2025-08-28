@@ -18,17 +18,14 @@ import { Response } from 'express';
 import { MusicGeneratorService } from './music-generator.service';
 import { ClerkAuthGuard } from 'src/auth/guards/clerk-auth-guard';
 import { GetClerkId } from 'src/auth/decorators/get-clerk-id-decorator';
-import {
-  GenerateMusicZodDto,
-  MusicBufferResponseZodDto,
-} from './schemas/generate-music.schema';
+import { type GenerateMusicDto } from './dto/music-generation.dto';
 
 // Using Zod DTO from schemas - no need to redefine here
 
 // Using Zod DTO for buffer response from schemas - no need to redefine here
 
 @ApiTags('Music Generation')
-@Controller('music')
+@Controller('music-generator')
 export class MusicGeneratorController {
   constructor(private readonly musicGeneratorService: MusicGeneratorService) {}
 
@@ -45,8 +42,34 @@ export class MusicGeneratorController {
       'Generate an audio file from a text description. Returns the audio as a downloadable MP3 file. Requires authentication.',
   })
   @ApiBody({
-    type: GenerateMusicZodDto,
     description: 'Music generation parameters',
+    schema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 100,
+          description: 'Name for the generated music track',
+          example: 'My Awesome Song',
+        },
+        prompt: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 2000,
+          description: 'Text prompt describing the music to generate',
+          example: 'upbeat electronic dance music with synthesizers',
+        },
+        lengthMs: {
+          type: 'number',
+          minimum: 10000,
+          maximum: 300000,
+          description: 'Length of the generated music in milliseconds',
+          example: 30000,
+        },
+      },
+      required: ['name', 'prompt'],
+    },
   })
   @ApiResponse({
     status: 200,
@@ -81,7 +104,7 @@ export class MusicGeneratorController {
     description: 'Internal server error - music generation failed',
   })
   async generateMusic(
-    @Body() generateMusicDto: GenerateMusicZodDto,
+    @Body() generateMusicDto: GenerateMusicDto,
     @GetClerkId() clerkId: string,
     @Res() res: Response,
   ) {
@@ -119,70 +142,6 @@ export class MusicGeneratorController {
           res.status(500).json({ error: 'Failed to generate music' });
         }
       });
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        'Failed to generate music',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  /**
-   * Alternative endpoint that returns the audio as a buffer (for testing)
-   */
-  @Post('generate-buffer')
-  @UseGuards(ClerkAuthGuard)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({
-    summary: 'Generate music and return as base64 (for testing)',
-    description:
-      'Generate music and return it as base64 encoded data instead of a file download. Useful for testing and debugging. Requires authentication.',
-  })
-  @ApiBody({
-    type: GenerateMusicZodDto,
-    description: 'Music generation parameters',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Successfully generated music as base64',
-    type: MusicBufferResponseZodDto,
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Bad request - invalid prompt',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - authentication required',
-  })
-  @ApiResponse({
-    status: 500,
-    description: 'Internal server error - music generation failed',
-  })
-  async generateMusicBuffer(
-    @Body() generateMusicDto: GenerateMusicZodDto,
-    @GetClerkId() clerkId: string, // eslint-disable-line @typescript-eslint/no-unused-vars -- Will be used when we implement database storage
-  ): Promise<MusicBufferResponseZodDto> {
-    try {
-      const { prompt, lengthMs } = generateMusicDto;
-      // Zod validation handles all input validation automatically
-
-      const audioStream =
-        await this.musicGeneratorService.generateMusicFromPrompt(
-          prompt,
-          lengthMs,
-        );
-
-      const audioBuffer =
-        await this.musicGeneratorService.streamToBuffer(audioStream);
-
-      return {
-        audioBase64: audioBuffer.toString('base64'),
-        size: audioBuffer.length,
-      };
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
