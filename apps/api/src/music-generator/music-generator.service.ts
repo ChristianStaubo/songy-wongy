@@ -1,8 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GenerateMusicDto } from '@repo/types';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import {
+  GenerateMusicDto,
+  MusicGenerationRequestResponse,
+  MusicStatusResponse,
+} from '@repo/types';
 import { Readable } from 'stream';
 import { S3Service } from '../s3/s3.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { MusicGenerationRequestedEvent } from '../workers/events/music-generation-event';
 
 @Injectable()
 export class MusicGeneratorService {
@@ -14,6 +21,8 @@ export class MusicGeneratorService {
   constructor(
     private configService: ConfigService,
     private s3Service: S3Service,
+    private prismaService: PrismaService,
+    private eventEmitter: EventEmitter2,
   ) {
     this.apiKey = this.configService.get<string>('ELEVENLABS_API_KEY');
     this.bucket = this.configService.get<string>('AWS_S3_MUSIC_BUCKET');
@@ -29,6 +38,93 @@ export class MusicGeneratorService {
       );
       throw new Error('AWS_S3_MUSIC_BUCKET is required');
     }
+  }
+
+  /**
+   * Request music generation (async workflow)
+   * Creates database record and emits event for worker queue processing
+   */
+  async requestMusicGeneration(
+    options: GenerateMusicDto,
+    userId: string,
+  ): Promise<MusicGenerationRequestResponse> {
+    // TODO: Validate user has permission/credits for music generation
+
+    this.logger.log(`Creating music generation request for user: ${userId}`);
+
+    // Create Music record in database
+    const musicRecord = await this.prismaService.music.create({
+      data: {
+        name: options.name,
+        prompt: options.prompt,
+        lengthMs: options.lengthMs || 10000, // Default to 10 seconds
+        status: 'GENERATING',
+        audioUrl: '', // Will be updated by worker
+        userId,
+      },
+    });
+
+    this.logger.log(`Created music record with ID: ${musicRecord.id}`);
+
+    // Emit event to trigger worker queue processing
+    const musicGenerationEvent: MusicGenerationRequestedEvent = {
+      data: {
+        musicId: musicRecord.id,
+        userId,
+        name: options.name,
+        prompt: options.prompt,
+        lengthMs: options.lengthMs,
+        outputFormat: options.outputFormat,
+        modelId: options.modelId,
+      },
+    };
+
+    this.eventEmitter.emit('music.generation.requested', musicGenerationEvent);
+
+    this.logger.log(
+      `📤 Emitted music.generation.requested event for music ID: ${musicRecord.id}`,
+    );
+
+    const response: MusicGenerationRequestResponse = {
+      musicId: musicRecord.id,
+      name: musicRecord.name,
+      prompt: musicRecord.prompt,
+      status: 'GENERATING',
+      lengthMs: musicRecord.lengthMs,
+      createdAt: musicRecord.createdAt.toISOString(),
+    };
+
+    return response;
+  }
+
+  /**
+   * Get music generation status
+   */
+  async getMusicStatus(
+    musicId: string,
+    userId: string,
+  ): Promise<MusicStatusResponse> {
+    const music = await this.prismaService.music.findFirst({
+      where: {
+        id: musicId,
+        userId, // Ensure user can only access their own music
+      },
+    });
+
+    if (!music) {
+      throw new Error('Music record not found');
+    }
+
+    return {
+      musicId: music.id,
+      name: music.name,
+      prompt: music.prompt,
+      status: music.status as 'GENERATING' | 'COMPLETED' | 'FAILED',
+      lengthMs: music.lengthMs,
+      audioUrl: music.audioUrl || null,
+      createdAt: music.createdAt.toISOString(),
+      updatedAt: music.updatedAt.toISOString(),
+    };
   }
 
   /**

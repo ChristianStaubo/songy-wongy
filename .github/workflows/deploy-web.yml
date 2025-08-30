@@ -1,0 +1,97 @@
+name: Deploy Web to Vercel
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: ["completed"]
+    branches: ["main"]
+
+concurrency:
+  group: deploy-web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build, Test, and Deploy Web
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+    steps:
+      - name: Check out code at CI head commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Detect web-related changes
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "HEAD: $(git rev-parse HEAD)"
+          BASE=$(git rev-parse HEAD^)
+          echo "BASE: $BASE"
+          CHANGED=$(git diff --name-only "$BASE" HEAD || true)
+          echo "$CHANGED" | sed 's/^/changed: /'
+          if echo "$CHANGED" | grep -E '^(apps/web/|packages/types/|packages/eslint-config/|packages/typescript-config/|package.json$|yarn.lock$|turbo.json$)'; then
+            echo "web_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "web_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: "yarn"
+        if: steps.changes.outputs.web_changed == 'true'
+
+      - name: Install dependencies
+        if: steps.changes.outputs.web_changed == 'true'
+        run: yarn install --frozen-lockfile
+
+      - name: Lint
+        if: steps.changes.outputs.web_changed == 'true'
+        run: yarn turbo run lint --filter=web
+
+      - name: Type check
+        if: steps.changes.outputs.web_changed == 'true'
+        run: yarn turbo run check-types --filter=web
+
+      - name: Test
+        if: steps.changes.outputs.web_changed == 'true'
+        run: yarn turbo run test --filter=web
+
+      - name: Build
+        if: steps.changes.outputs.web_changed == 'true'
+        run: yarn turbo run build --filter=web
+
+      - name: Pull Vercel environment
+        if: steps.changes.outputs.web_changed == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        run: npx vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
+
+      - name: Build with Vercel (prebuild in CI)
+        if: steps.changes.outputs.web_changed == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        run: npx vercel build --prod --token "$VERCEL_TOKEN"
+
+      - name: Deploy to Vercel (prebuilt)
+        if: steps.changes.outputs.web_changed == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        run: npx vercel deploy --prebuilt --prod --yes --token "$VERCEL_TOKEN"
+
+      - name: Skip - no web changes detected
+        if: steps.changes.outputs.web_changed != 'true'
+        run: echo "No web-related changes detected; skipping deploy."

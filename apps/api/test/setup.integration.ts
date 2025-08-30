@@ -3,7 +3,6 @@
 
 import { beforeAll, afterAll } from '@jest/globals';
 import { Test, TestingModule } from '@nestjs/testing';
-import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
 import { ZodValidationPipe, ZodSerializerInterceptor } from 'nestjs-zod';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
@@ -40,11 +39,18 @@ beforeAll(async () => {
   }
 
   // Check AWS variables (optional - S3 tests will be skipped if missing)
-  const awsVars = ['AWS_S3_REGION', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_S3_MUSIC_BUCKET'];
+  const awsVars = [
+    'AWS_S3_REGION',
+    'AWS_ACCESS_KEY_ID',
+    'AWS_SECRET_ACCESS_KEY',
+    'AWS_S3_MUSIC_BUCKET',
+  ];
   const missingAwsVars = awsVars.filter((varName) => !process.env[varName]);
 
   if (missingAwsVars.length > 0) {
-    console.log(`⚠️ Missing AWS credentials: ${missingAwsVars.join(', ')} - S3 tests will be skipped`);
+    console.log(
+      `⚠️ Missing AWS credentials: ${missingAwsVars.join(', ')} - S3 tests will be skipped`,
+    );
   } else {
     console.log('✅ AWS credentials found - S3 tests will run');
   }

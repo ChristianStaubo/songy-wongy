@@ -1,5 +1,5 @@
+import { PrismaService } from '../../src/prisma/prisma.service';
 import { describe, it, expect, beforeAll } from '@jest/globals';
-import { PrismaService } from '../src/prisma/prisma.service';
 
 describe('App Integration Tests - Basic Setup', () => {
   let prisma: PrismaService;

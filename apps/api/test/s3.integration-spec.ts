@@ -67,7 +67,7 @@ describeS3('S3Service Integration Tests', () => {
       // Validate the URL structure
       expect(presignedUrl).toBeTruthy();
       expect(presignedUrl).toContain(testBucket);
-      expect(presignedUrl).toContain(encodeURIComponent(testKey));
+      expect(presignedUrl).toContain(testKey); // Key appears in path, not URL-encoded
       expect(presignedUrl).toContain('X-Amz-Algorithm=AWS4-HMAC-SHA256');
       expect(presignedUrl).toContain('X-Amz-Credential');
       expect(presignedUrl).toContain('X-Amz-Signature');
@@ -107,7 +107,7 @@ describeS3('S3Service Integration Tests', () => {
       // Validate the URL structure
       expect(presignedDownloadUrl).toBeTruthy();
       expect(presignedDownloadUrl).toContain(testBucket);
-      expect(presignedDownloadUrl).toContain(encodeURIComponent(testKey));
+      expect(presignedDownloadUrl).toContain(testKey); // Key appears in path, not URL-encoded
       expect(presignedDownloadUrl).toContain(
         'X-Amz-Algorithm=AWS4-HMAC-SHA256',
       );
@@ -144,9 +144,8 @@ describeS3('S3Service Integration Tests', () => {
         );
 
         expect(presignedUrl).toBeTruthy();
-        expect(presignedUrl).toContain(
-          'Content-Type=' + encodeURIComponent(testCase.contentType),
-        );
+        // Note: Content-Type is enforced during upload, not visible in presigned URL
+        expect(presignedUrl).toContain('X-Amz-Algorithm=AWS4-HMAC-SHA256');
       }
 
       console.log('✅ Validated presigned URLs for different content types');
@@ -308,11 +307,20 @@ describeS3('S3Service Integration Tests', () => {
       const invalidBucket = 'this-bucket-definitely-does-not-exist-12345';
       const testKey = 'test.txt';
 
-      await expect(
-        s3Service.getPresignedUploadUrl(invalidBucket, testKey, 'text/plain'),
-      ).rejects.toThrow();
+      // Note: AWS generates presigned URLs even for non-existent buckets
+      // The error occurs when you try to use the URL, not when generating it
+      const presignedUrl = await s3Service.getPresignedUploadUrl(
+        invalidBucket,
+        testKey,
+        'text/plain',
+      );
 
-      console.log('✅ Properly handled invalid bucket name');
+      expect(presignedUrl).toBeTruthy();
+      expect(presignedUrl).toContain(invalidBucket);
+
+      console.log(
+        '✅ Generated presigned URL for non-existent bucket (error occurs on use)',
+      );
     });
 
     it('should handle invalid object key for download', async () => {

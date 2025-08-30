@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build
+        run: yarn turbo run build
+
+      - name: Detect if any package has tests
+        id: detect_tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          HAS_TESTS=$(node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const roots = ["apps", "packages"]; 
+            let has = false;
+            for (const root of roots) {
+              if (!fs.existsSync(root)) continue;
+              for (const dir of fs.readdirSync(root)) {
+                const pkgPath = path.join(root, dir, "package.json");
+                if (fs.existsSync(pkgPath)) {
+                  try {
+                    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+                    if (pkg.scripts && pkg.scripts.test) { has = true; break; }
+                  } catch {}
+                }
+              }
+              if (has) break;
+            }
+            process.stdout.write(has ? "true" : "false");
+          ')
+          echo "has_tests=$HAS_TESTS" >> "$GITHUB_OUTPUT"
+
+      - name: Test
+        if: steps.detect_tests.outputs.has_tests == 'true'
+        run: yarn turbo run test
+
+      - name: Skip tests (no packages define test script)
+        if: steps.detect_tests.outputs.has_tests != 'true'
+        run: echo "No test scripts found in workspaces; skipping tests step."

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { ExecutionContext, Module } from '@nestjs/common';
 import { APP_PIPE, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -7,6 +7,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { MusicGeneratorModule } from './music-generator/music-generator.module';
+import { MusicGenerationQueueModule } from './workers/music-generation-queue.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -14,6 +15,11 @@ import * as Joi from 'joi';
 import { LoggerModule } from 'nestjs-pino';
 import { ZodValidationPipe, ZodSerializerInterceptor } from 'nestjs-zod';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
+import { minutes, ThrottlerModule } from '@nestjs/throttler';
+import { Keyv } from 'keyv';
+import KeyvRedis from '@keyv/redis';
+import { CacheModule } from '@nestjs/cache-manager';
 
 @Module({
   imports: [
@@ -43,6 +49,101 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
       }),
     }),
 
+    CacheModule.registerAsync({
+      useFactory: async (configService: ConfigService) => {
+        try {
+          // Prefer REDIS_URI if available, otherwise build from individual components
+          let redisUrl = configService.get<string>('REDIS_URI');
+
+          if (!redisUrl) {
+            const redisHost = configService.get('REDIS_HOST', 'localhost');
+            const redisPort = configService.get('REDIS_PORT', 6379);
+            const redisPassword = configService.get('REDIS_PASSWORD');
+
+            console.log('🔧 Redis Cache Configuration (Keyv):', {
+              host: redisHost,
+              port: redisPort,
+              database: 0,
+              auth: redisPassword ? 'ENABLED' : 'DISABLED',
+            });
+
+            // Build Redis URL with optional password support
+            redisUrl = redisPassword
+              ? `redis://default:${redisPassword}@${redisHost}:${redisPort}/0`
+              : `redis://${redisHost}:${redisPort}/0`;
+          }
+
+          const keyvStore = new Keyv({
+            store: new KeyvRedis(redisUrl),
+            namespace: 'cache',
+          });
+
+          // Test the connection
+          await keyvStore.set('test-connection', 'success', 10000); // Longer TTL for connection test
+          const testResult = await keyvStore.get('test-connection');
+
+          if (testResult === 'success') {
+            console.log('✅ Keyv Redis store connected successfully');
+            await keyvStore.delete('test-connection');
+          } else {
+            throw new Error('Connection test failed');
+          }
+
+          return {
+            stores: [keyvStore],
+            ttl: 3600000, // 1 hour in milliseconds
+          };
+        } catch (error) {
+          console.error('❌ Keyv Redis store initialization failed:', error);
+          console.log('⚠️ Falling back to memory store');
+          return {
+            ttl: 3600000, // 1 hour in milliseconds
+          };
+        }
+      },
+      isGlobal: true,
+      inject: [ConfigService],
+    }),
+
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => {
+        // Use REDIS_URI if available, otherwise build from components
+        const redisUri = configService.get<string>('REDIS_URI');
+
+        let redisConfig;
+        if (redisUri) {
+          // Parse REDIS_URI for ThrottlerStorageRedisService
+          const url = new URL(redisUri);
+          redisConfig = {
+            host: url.hostname,
+            port: parseInt(url.port, 10) || 6379,
+            password: url.password || undefined,
+          };
+        } else {
+          // Fallback to individual components
+          redisConfig = {
+            host: configService.get('REDIS_HOST', 'localhost'),
+            port: configService.get('REDIS_PORT', 6379),
+            password: configService.get('REDIS_PASSWORD') || undefined,
+          };
+        }
+
+        return {
+          throttlers: [
+            {
+              ttl: minutes(1),
+              limit: 100,
+            },
+          ],
+          errorMessage: 'Too many requests. Please try again later.',
+          storage: new ThrottlerStorageRedisService(redisConfig),
+          generateKey: (ctx: ExecutionContext, tracker: string) => tracker,
+        };
+      },
+      inject: [ConfigService],
+    }),
+
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (config: ConfigService) => {
@@ -52,7 +153,6 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
           : {
               host: config.get<string>('REDIS_HOST', 'localhost'),
               port: config.get<number>('REDIS_PORT', 6379),
-              password: config.get<string>('REDIS_PASSWORD') || undefined,
             };
 
         return {
@@ -97,6 +197,9 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     AuthModule,
     UsersModule,
     MusicGeneratorModule,
+
+    // Worker Queues
+    MusicGenerationQueueModule,
   ],
   controllers: [AppController],
   providers: [

@@ -1,3 +1,4 @@
+/* eslint-disable no-var */
 import { INestApplication } from '@nestjs/common';
 import { PrismaService } from '../../src/prisma/prisma.service';
 

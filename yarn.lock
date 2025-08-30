@@ -1616,6 +1616,20 @@
     "@jridgewell/resolve-uri" "^3.1.0"
     "@jridgewell/sourcemap-codec" "^1.4.14"
 
+"@keyv/redis@^5.1.1":
+  version "5.1.1"
+  resolved "https://registry.yarnpkg.com/@keyv/redis/-/redis-5.1.1.tgz#47c7bd61eaa099347948d2042074f118873c6cfb"
+  integrity sha512-bPypEnO2uSDjrgDP2whyewZ2R8aAJvoLM2440J1omjpJnzv1Awzs3RIztQGoDafNhPe0dZeI+44XKCdSiWkgTg==
+  dependencies:
+    "@redis/client" "^5.7.0"
+    cluster-key-slot "^1.1.2"
+    hookified "^1.11.0"
+
+"@keyv/serialize@^1.1.0":
+  version "1.1.0"
+  resolved "https://registry.yarnpkg.com/@keyv/serialize/-/serialize-1.1.0.tgz#08f5d89096110fdcf778e5337362e1cd5afad70a"
+  integrity sha512-RlDgexML7Z63Q8BSaqhXdCYNBy/JQnqYIwxofUrNLGCblOMHp+xux2Q8nLMLlPpgHQPoU0Do8Z6btCpRBEqZ8g==
+
 "@levischuck/tiny-cbor@^0.2.2":
   version "0.2.11"
   resolved "https://registry.npmjs.org/@levischuck/tiny-cbor/-/tiny-cbor-0.2.11.tgz"
@@ -1676,6 +1690,13 @@
     "@emnapi/core" "^1.4.3"
     "@emnapi/runtime" "^1.4.3"
     "@tybys/wasm-util" "^0.10.0"
+
+"@nest-lab/throttler-storage-redis@^1.1.0":
+  version "1.1.0"
+  resolved "https://registry.yarnpkg.com/@nest-lab/throttler-storage-redis/-/throttler-storage-redis-1.1.0.tgz#78f3dad83dbf6f890f27ce3f323b4a1e5f33e227"
+  integrity sha512-7DW8MuqoB+ubu8cWby9Vw56eAFqsHFfowEflHbmmAF2sNByRdzcR4ddcyoYLwL3zG53nLmvzUa4EXoHKB4RoaQ==
+  dependencies:
+    tslib "^2.3.0"
 
 "@nestjs/bull-shared@^11.0.3":
   version "11.0.3"
@@ -1805,6 +1826,11 @@
   integrity sha512-nMkRDukDKskdPruM6EsgMq7yJua+CPZM6I6FrLP8yXw8BiVSPv9Nm0CtcGGwt3kgZF9hfxKjGqLjsvVBsv6Vfw==
   dependencies:
     tslib "2.8.1"
+
+"@nestjs/throttler@^6.4.0":
+  version "6.4.0"
+  resolved "https://registry.yarnpkg.com/@nestjs/throttler/-/throttler-6.4.0.tgz#5060e2157f4e8b0cb7886eef367751700549de5e"
+  integrity sha512-osL67i0PUuwU5nqSuJjtUJZMkxAnYB4VldgYUMGzvYRJDCqGRFMWbsbzm/CkUtPLRL30I8T74Xgt/OQxnYokiA==
 
 "@next/env@15.5.2":
   version "15.5.2"
@@ -2308,6 +2334,13 @@
   integrity sha512-ewrXRDTAqAXlkl6t/fkXWNAhFX9I+CkKlw6zjEwk86RSPKwZr3xpBRso655aqYafwtnbpHLj6toFzmd6xdVptQ==
   dependencies:
     "@radix-ui/react-use-layout-effect" "1.1.1"
+
+"@redis/client@^5.7.0":
+  version "5.8.2"
+  resolved "https://registry.yarnpkg.com/@redis/client/-/client-5.8.2.tgz#099f387b7fba99180c10e0e7093b71d022e704f8"
+  integrity sha512-WtMScno3+eBpTac1Uav2zugXEoXqaU23YznwvFgkPwBQVwEHTDgOG7uEAObtZ/Nyn8SmAMbqkEubJaMOvnqdsQ==
+  dependencies:
+    cluster-key-slot "1.1.2"
 
 "@simplewebauthn/browser@^10.0.0":
   version "10.0.0"
@@ -3085,6 +3118,13 @@
     "@types/connect" "*"
     "@types/node" "*"
 
+"@types/cache-manager@^5.0.0":
+  version "5.0.0"
+  resolved "https://registry.yarnpkg.com/@types/cache-manager/-/cache-manager-5.0.0.tgz#5b98c6ef3ba8a17f1e63eafd4e50303ccf5d75c7"
+  integrity sha512-YaQBBhn2OIShxGMH7l1qzGgXCQJ2TRYTqMhFMXRBkDcXQIlqXv+XFkBGstwXSyv7q+JQm3HbpVhaVF8l5tr+Hg==
+  dependencies:
+    cache-manager "*"
+
 "@types/connect@*":
   version "3.4.38"
   resolved "https://registry.npmjs.org/@types/connect/-/connect-3.4.38.tgz"
@@ -3148,6 +3188,13 @@
   version "2.0.5"
   resolved "https://registry.npmjs.org/@types/http-errors/-/http-errors-2.0.5.tgz"
   integrity sha512-r8Tayk8HJnX0FztbZN7oVqGccWgw98T/0neJphO91KkmOzug1KkofZURD4UaD5uH8AqcFLfdPErnBod0u71/qg==
+
+"@types/ioredis@^5.0.0":
+  version "5.0.0"
+  resolved "https://registry.yarnpkg.com/@types/ioredis/-/ioredis-5.0.0.tgz#c1ea7e2f3e2c5a942a27cfee6f62ddcfb23fb3e7"
+  integrity sha512-zJbJ3FVE17CNl5KXzdeSPtdltc4tMT3TzC6fxQS0sQngkbFZ6h+0uTafsRqu+eSLIugf6Yb0Ea0SUuRr42Nk9g==
+  dependencies:
+    ioredis "*"
 
 "@types/istanbul-lib-coverage@*", "@types/istanbul-lib-coverage@^2.0.0", "@types/istanbul-lib-coverage@^2.0.1":
   version "2.0.6"
@@ -4051,6 +4098,13 @@ c12@3.1.0:
     pkg-types "^2.2.0"
     rc9 "^2.1.2"
 
+cache-manager@*, cache-manager@^7.2.0:
+  version "7.2.0"
+  resolved "https://registry.yarnpkg.com/cache-manager/-/cache-manager-7.2.0.tgz#2b29098e6d748e875bbccd148fc28639d9f5cdf8"
+  integrity sha512-GRv0Ji8Xgqtrg1Mmi4ygYpIt+SOApQNjJb5+rYIl+5y3u+tyBf+Csx79LL4wQjKLio63A6x1OpuBzhMzRv9jJg==
+  dependencies:
+    keyv "^5.5.0"
+
 call-bind-apply-helpers@^1.0.0, call-bind-apply-helpers@^1.0.1, call-bind-apply-helpers@^1.0.2:
   version "1.0.2"
   resolved "https://registry.npmjs.org/call-bind-apply-helpers/-/call-bind-apply-helpers-1.0.2.tgz"
@@ -4231,7 +4285,7 @@ clsx@^2.1.1:
   resolved "https://registry.npmjs.org/clsx/-/clsx-2.1.1.tgz"
   integrity sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==
 
-cluster-key-slot@^1.1.0:
+cluster-key-slot@1.1.2, cluster-key-slot@^1.1.0, cluster-key-slot@^1.1.2:
   version "1.1.2"
   resolved "https://registry.yarnpkg.com/cluster-key-slot/-/cluster-key-slot-1.1.2.tgz#88ddaa46906e303b5de30d3153b7d9fe0a0c19ac"
   integrity sha512-RMr0FhtfXemyinomL4hrWcYJxmX6deFdCxpJzhDttxgO1+bcCnkk+9drydLVDmAMG7NE6aN/fl4F7ucU/90gAA==
@@ -5720,6 +5774,11 @@ help-me@^5.0.0:
   resolved "https://registry.npmjs.org/help-me/-/help-me-5.0.0.tgz"
   integrity sha512-7xgomUX6ADmcYzFik0HzAxh/73YlKR9bmFzf51CZwR+b6YtzU2m0u49hQCqV6SvlqIqsaxovfwdvbnsw3b/zpg==
 
+hookified@^1.11.0:
+  version "1.12.0"
+  resolved "https://registry.yarnpkg.com/hookified/-/hookified-1.12.0.tgz#eb4097ed1459211eef47fe85a8b3382c5f633996"
+  integrity sha512-hMr1Y9TCLshScrBbV2QxJ9BROddxZ12MX9KsCtuGGy/3SmmN5H1PllKerrVlSotur9dlE8hmUKAOSa3WDzsZmQ==
+
 html-escaper@^2.0.0:
   version "2.0.2"
   resolved "https://registry.npmjs.org/html-escaper/-/html-escaper-2.0.2.tgz"
@@ -5855,7 +5914,7 @@ internal-slot@^1.1.0:
     hasown "^2.0.2"
     side-channel "^1.1.0"
 
-ioredis@^5.4.1:
+ioredis@*, ioredis@^5.4.1, ioredis@^5.7.0:
   version "5.7.0"
   resolved "https://registry.yarnpkg.com/ioredis/-/ioredis-5.7.0.tgz#be8f4a09bfb67bfa84ead297ff625973a5dcefc3"
   integrity sha512-NUcA93i1lukyXU+riqEyPtSEkyFq8tX90uL659J+qpCZ3rEdViB/APC58oAhIh3+bJln2hzdlZbBZsGNrlsR8g==
@@ -6683,6 +6742,13 @@ keyv@^4.5.3, keyv@^4.5.4:
   integrity sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==
   dependencies:
     json-buffer "3.0.1"
+
+keyv@^5.5.0:
+  version "5.5.0"
+  resolved "https://registry.yarnpkg.com/keyv/-/keyv-5.5.0.tgz#0ad5037484a7e01b033df7018033b5cc9ca7884f"
+  integrity sha512-QG7qR2tijh1ftOvClut4YKKg1iW6cx3GZsKoGyJPxHkGWK9oJhG9P3j5deP0QQOGDowBMVQFaP+Vm4NpGYvmIQ==
+  dependencies:
+    "@keyv/serialize" "^1.1.0"
 
 kleur@^3.0.3:
   version "3.0.3"
@@ -8863,7 +8929,7 @@ tsconfig-paths@4.2.0, tsconfig-paths@^4.1.2, tsconfig-paths@^4.2.0:
     minimist "^1.2.6"
     strip-bom "^3.0.0"
 
-tslib@2.8.1, tslib@^2.0.0, tslib@^2.1.0, tslib@^2.4.0, tslib@^2.6.2, tslib@^2.8.0, tslib@^2.8.1:
+tslib@2.8.1, tslib@^2.0.0, tslib@^2.1.0, tslib@^2.3.0, tslib@^2.4.0, tslib@^2.6.2, tslib@^2.8.0, tslib@^2.8.1:
   version "2.8.1"
   resolved "https://registry.npmjs.org/tslib/-/tslib-2.8.1.tgz"
   integrity sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==

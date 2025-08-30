@@ -1,10 +1,13 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
+  Param,
   UseGuards,
   Logger,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -27,7 +30,7 @@ export class MusicGeneratorController {
 
   /**
    * Generate music from a text prompt
-   * Returns S3 URL and metadata of the generated audio file
+   * Creates a music record and queues generation job for background processing
    */
   @Post('generate')
   @UseGuards(ClerkAuthGuard)
@@ -35,7 +38,7 @@ export class MusicGeneratorController {
   @ApiOperation({
     summary: 'Generate music from text prompt',
     description:
-      'Generate an audio file from a text description and upload it to S3. Returns S3 URL and metadata. Requires authentication.',
+      'Creates a music generation job and returns immediately. Use the returned musicId to poll for completion status.',
   })
   @ApiBody({
     description: 'Music generation parameters',
@@ -69,26 +72,35 @@ export class MusicGeneratorController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Successfully generated music file and uploaded to S3',
+    description: 'Music generation job created successfully',
     schema: {
       type: 'object',
       properties: {
-        s3Url: {
-          type: 'string',
-          description: 'S3 URL of the generated music file',
-        },
-        key: { type: 'string', description: 'S3 object key' },
-        bucket: { type: 'string', description: 'S3 bucket name' },
-        metadata: {
+        success: { type: 'boolean', example: true },
+        data: {
           type: 'object',
           properties: {
-            name: { type: 'string' },
-            prompt: { type: 'string' },
-            lengthMs: { type: 'number' },
-            outputFormat: { type: 'string' },
-            modelId: { type: 'string' },
-            generatedAt: { type: 'string' },
+            musicId: {
+              type: 'string',
+              description: 'Unique ID for the music record',
+            },
+            name: { type: 'string', description: 'Name of the music track' },
+            prompt: { type: 'string', description: 'Generation prompt used' },
+            status: {
+              type: 'string',
+              enum: ['GENERATING'],
+              description: 'Current status',
+            },
+            lengthMs: {
+              type: 'number',
+              description: 'Requested length in milliseconds',
+            },
+            createdAt: { type: 'string', description: 'Creation timestamp' },
           },
+        },
+        message: {
+          type: 'string',
+          example: 'Music generation job created successfully',
         },
       },
     },
@@ -117,25 +129,70 @@ export class MusicGeneratorController {
     @Body() generateMusicDto: GenerateMusicDto,
     @GetClerkId() clerkId: string,
   ) {
-    try {
-      // Zod validation handles all input validation automatically
+    // Delegate to service layer - service handles all business logic
+    return await this.musicGeneratorService.requestMusicGeneration(
+      generateMusicDto,
+      clerkId,
+    );
+  }
 
-      // TODO:
-      // 1. Create Music record in database with status=GENERATING
-      // 2. Update Music record with audioUrl and status=COMPLETED after S3 upload
-      // 3. Associate music with user (clerkId)
+  /**
+   * Get music generation status
+   * Returns current status and metadata for a music generation job
+   */
+  @Get('status/:musicId')
+  @UseGuards(ClerkAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Get music generation status',
+    description: 'Check the current status of a music generation job',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Music status retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        data: {
+          type: 'object',
+          properties: {
+            musicId: { type: 'string' },
+            name: { type: 'string' },
+            prompt: { type: 'string' },
+            status: {
+              type: 'string',
+              enum: ['GENERATING', 'COMPLETED', 'FAILED'],
+            },
+            lengthMs: { type: 'number' },
+            audioUrl: {
+              type: 'string',
+              description: 'S3 URL (available when status=COMPLETED)',
+            },
+            createdAt: { type: 'string' },
+            updatedAt: { type: 'string' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Music record not found',
+  })
+  async getMusicStatus(
+    @Param('musicId') musicId: string,
+    @GetClerkId() clerkId: string,
+  ) {
+    // Delegate to service layer - let NestJS handle exceptions
+    const result = await this.musicGeneratorService.getMusicStatus(
+      musicId,
+      clerkId,
+    );
 
-      const result =
-        await this.musicGeneratorService.generateMusic(generateMusicDto);
-
-      return {
-        success: true,
-        data: result,
-        message: 'Music generated and uploaded successfully',
-      };
-    } catch (error) {
-      this.logger.error('Error generating music:', error);
-      throw new InternalServerErrorException('Failed to generate music');
-    }
+    return {
+      success: true,
+      data: result,
+    };
   }
 }

@@ -2,7 +2,7 @@
   "preset": "ts-jest",
   "testEnvironment": "node",
   "rootDir": "..",
-  "testRegex": ".(integration|e2e)-spec.ts$",
+  "testRegex": "test/e2e/.*\\.(integration|e2e)-spec\\.ts$",
   "setupFilesAfterEnv": ["<rootDir>/test/setup.integration.ts"],
   "moduleNameMapper": {
     "^src/(.*)$": "<rootDir>/src/$1"

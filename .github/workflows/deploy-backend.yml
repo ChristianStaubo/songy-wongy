@@ -1,0 +1,105 @@
+name: Deploy Backend to DigitalOcean
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: ["completed"]
+    branches: ["main"]
+
+concurrency:
+  group: deploy-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build, Test, and Deploy Backend
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+    steps:
+      - name: Check out code at CI head commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Detect backend-related changes
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "HEAD: $(git rev-parse HEAD)"
+          BASE=$(git rev-parse HEAD^)
+          echo "BASE: $BASE"
+          CHANGED=$(git diff --name-only "$BASE" HEAD || true)
+          echo "Changed files:"
+          echo "$CHANGED" | sed 's/^/  /'
+          echo "Checking for backend changes..."
+          if echo "$CHANGED" | grep -E '^(apps/backend/|packages/types/|packages/eslint-config/|packages/typescript-config/|package.json$|yarn.lock$|turbo.json$)'; then
+            echo "✅ Backend changes detected!"
+            echo "backend_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "❌ No backend changes detected"
+            echo "backend_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Final backend_changed value: $(cat $GITHUB_OUTPUT | grep backend_changed || echo 'not found')"
+
+      - name: Debug - Workflow is running
+        run: |
+          echo "🚀 Backend deployment workflow is running!"
+          echo "Workflow run ID: ${{ github.run_id }}"
+          echo "Triggering workflow: ${{ github.event.workflow_run.name }}"
+          echo "Triggering workflow conclusion: ${{ github.event.workflow_run.conclusion }}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: "yarn"
+        if: steps.changes.outputs.backend_changed == 'true'
+
+      - name: Install dependencies
+        if: steps.changes.outputs.backend_changed == 'true'
+        run: yarn install --frozen-lockfile
+
+      - name: Lint
+        if: steps.changes.outputs.backend_changed == 'true'
+        run: yarn turbo run lint --filter=backend
+
+      - name: Type check
+        if: steps.changes.outputs.backend_changed == 'true'
+        run: yarn turbo run check-types --filter=backend
+
+      - name: Test
+        if: steps.changes.outputs.backend_changed == 'true'
+        run: yarn turbo run test --filter=backend
+
+      - name: Build
+        if: steps.changes.outputs.backend_changed == 'true'
+        run: yarn turbo run build --filter=backend
+
+      - name: Install doctl
+        if: steps.changes.outputs.backend_changed == 'true'
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Trigger DO App Deployment
+        if: steps.changes.outputs.backend_changed == 'true'
+        run: doctl apps create-deployment ${{ secrets.DO_APP_ID }}
+
+      - name: Skip - no backend changes detected
+        if: steps.changes.outputs.backend_changed != 'true'
+        run: echo "No backend-related changes detected; skipping deploy."
+
+      - name: Workflow completed
+        run: |
+          echo "✅ Backend deployment workflow completed!"
+          echo "Backend changed: ${{ steps.changes.outputs.backend_changed }}"
+          if [ "${{ steps.changes.outputs.backend_changed }}" = "true" ]; then
+            echo "🚀 Deployment should have been triggered!"
+          else
+            echo "⏭️  Deployment was skipped due to no backend changes"
+          fi
