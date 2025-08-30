@@ -1,0 +1,45 @@
+networks:
+  test_network:
+    driver: bridge
+
+services:
+  test-postgres:
+    image: postgres:16
+    container_name: songy-wongy-test-postgres
+    ports:
+      - '5433:5432' # Use port 5433 to avoid conflict with dev PostgreSQL on 5432
+    environment:
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpassword
+      POSTGRES_DB: songy_wongy_test
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - test_network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U testuser -d songy_wongy_test']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  test-redis:
+    image: redis:7.2
+    container_name: songy-wongy-test-redis
+    ports:
+      - '6380:6379' # Expose test Redis on host port 6380 (to avoid conflict with dev Redis on 6379)
+    restart: unless-stopped
+    networks:
+      - test_network
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+# Note: S3 testing uses real AWS S3 service for maximum reliability
+# No LocalStack needed - we test against actual S3 infrastructure
+
+volumes:
+  postgres_test_data:
+    # Define the volume for PostgreSQL data persistence

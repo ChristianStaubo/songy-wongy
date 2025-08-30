@@ -1,37 +1,116 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { GenerateMusicDto } from '@repo/types';
 import { Readable } from 'stream';
-
-export interface MusicGenerationOptions {
-  prompt?: string;
-  musicLengthMs?: number;
-  outputFormat?: string;
-  modelId?: string;
-}
+import { S3Service } from '../s3/s3.service';
 
 @Injectable()
 export class MusicGeneratorService {
   private readonly logger = new Logger(MusicGeneratorService.name);
   private readonly apiKey: string;
   private readonly baseUrl = 'https://api.elevenlabs.io/v1';
+  private readonly bucket: string;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private s3Service: S3Service,
+  ) {
     this.apiKey = this.configService.get<string>('ELEVENLABS_API_KEY');
+    this.bucket = this.configService.get<string>('AWS_S3_MUSIC_BUCKET');
+
     if (!this.apiKey) {
       this.logger.warn('ELEVENLABS_API_KEY not found in environment variables');
       throw new Error('ELEVENLABS_API_KEY is required');
     }
+
+    if (!this.bucket) {
+      this.logger.warn(
+        'AWS_S3_MUSIC_BUCKET not found in environment variables',
+      );
+      throw new Error('AWS_S3_MUSIC_BUCKET is required');
+    }
+  }
+
+  /**
+   * Generate music using ElevenLabs API and store in S3
+   * Returns S3 URL and metadata
+   */
+  async generateMusic(options: GenerateMusicDto): Promise<{
+    s3Url: string;
+    key: string;
+    bucket: string;
+    metadata: {
+      name: string;
+      prompt: string;
+      lengthMs?: number;
+      outputFormat: string;
+      modelId: string;
+      generatedAt: string;
+    };
+  }> {
+    const stream = await this.generateMusicStream(options);
+
+    // Generate S3 key
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const sanitizedName = options.name.replace(/[^a-zA-Z0-9-_]/g, '_');
+    const extension = this.getFileExtension(
+      options.outputFormat || 'mp3_44100_128',
+    );
+    const key = `music/${timestamp}_${sanitizedName}.${extension}`;
+
+    // Convert stream to buffer for S3 upload
+    const buffer = await this.streamToBuffer(stream);
+
+    // Prepare metadata
+    const metadata = {
+      name: options.name,
+      prompt: options.prompt,
+      lengthMs: options.lengthMs,
+      outputFormat: options.outputFormat || 'mp3_44100_128',
+      modelId: options.modelId || 'music_v1',
+      generatedAt: new Date().toISOString(),
+    };
+
+    // Upload to S3
+    const contentType = this.getContentType(
+      options.outputFormat || 'mp3_44100_128',
+    );
+    const s3Url = await this.s3Service.uploadBuffer(
+      this.bucket,
+      key,
+      buffer,
+      contentType,
+      {
+        name: metadata.name,
+        prompt: metadata.prompt,
+        outputFormat: metadata.outputFormat,
+        modelId: metadata.modelId,
+        generatedAt: metadata.generatedAt,
+        ...(metadata.lengthMs && { lengthMs: metadata.lengthMs.toString() }),
+      },
+    );
+
+    this.logger.log(`Music uploaded to S3: ${s3Url}`);
+
+    return {
+      s3Url,
+      key,
+      bucket: this.bucket,
+      metadata,
+    };
   }
 
   /**
    * Generate music using ElevenLabs API
-   * Returns a readable stream of audio data
+   * Returns a readable stream of audio data (internal method)
    */
-  async generateMusic(options: MusicGenerationOptions): Promise<Readable> {
+  private async generateMusicStream(
+    options: GenerateMusicDto,
+  ): Promise<Readable> {
     try {
       const {
         prompt,
-        musicLengthMs,
+        lengthMs,
         outputFormat = 'mp3_44100_128',
         modelId = 'music_v1',
       } = options;
@@ -51,8 +130,8 @@ export class MusicGeneratorService {
 
       if (prompt) {
         requestBody.prompt = prompt;
-        if (musicLengthMs) {
-          requestBody.music_length_ms = musicLengthMs;
+        if (lengthMs) {
+          requestBody.music_length_ms = lengthMs;
         }
       }
 
@@ -97,19 +176,6 @@ export class MusicGeneratorService {
   }
 
   /**
-   * Generate music from a simple text prompt (convenience method)
-   */
-  async generateMusicFromPrompt(
-    prompt: string,
-    lengthMs?: number,
-  ): Promise<Readable> {
-    return this.generateMusic({
-      prompt,
-      musicLengthMs: lengthMs || 10000, // Default to 10 seconds (ElevenLabs minimum)
-    });
-  }
-
-  /**
    * Convert a readable stream to buffer (utility method)
    */
   async streamToBuffer(stream: Readable): Promise<Buffer> {
@@ -120,5 +186,34 @@ export class MusicGeneratorService {
       stream.on('error', (err) => reject(err));
       stream.on('end', () => resolve(Buffer.concat(chunks)));
     });
+  }
+
+  /**
+   * Get file extension from output format
+   */
+  private getFileExtension(outputFormat: string): string {
+    if (outputFormat.startsWith('mp3_')) {
+      return 'mp3';
+    }
+    if (outputFormat.startsWith('pcm_')) {
+      return 'wav';
+    }
+    if (outputFormat === 'ulaw_8000') {
+      return 'wav';
+    }
+    return 'mp3'; // Default fallback
+  }
+
+  /**
+   * Get content type from output format
+   */
+  private getContentType(outputFormat: string): string {
+    if (outputFormat.startsWith('mp3_')) {
+      return 'audio/mpeg';
+    }
+    if (outputFormat.startsWith('pcm_') || outputFormat === 'ulaw_8000') {
+      return 'audio/wav';
+    }
+    return 'audio/mpeg'; // Default fallback
   }
 }

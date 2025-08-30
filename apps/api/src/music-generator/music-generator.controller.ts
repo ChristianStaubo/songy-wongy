@@ -2,10 +2,9 @@ import {
   Controller,
   Post,
   Body,
-  HttpException,
-  HttpStatus,
-  Res,
   UseGuards,
+  Logger,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -14,24 +13,21 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { Response } from 'express';
 import { MusicGeneratorService } from './music-generator.service';
 import { ClerkAuthGuard } from 'src/auth/guards/clerk-auth-guard';
 import { GetClerkId } from 'src/auth/decorators/get-clerk-id-decorator';
-import { type GenerateMusicDto } from './dto/music-generation.dto';
-
-// Using Zod DTO from schemas - no need to redefine here
-
-// Using Zod DTO for buffer response from schemas - no need to redefine here
+import { GenerateMusicDto } from '@repo/types';
 
 @ApiTags('Music Generation')
 @Controller('music-generator')
 export class MusicGeneratorController {
+  private readonly logger = new Logger(MusicGeneratorController.name);
+
   constructor(private readonly musicGeneratorService: MusicGeneratorService) {}
 
   /**
    * Generate music from a text prompt
-   * Returns audio file as streaming binary data
+   * Returns S3 URL and metadata of the generated audio file
    */
   @Post('generate')
   @UseGuards(ClerkAuthGuard)
@@ -39,7 +35,7 @@ export class MusicGeneratorController {
   @ApiOperation({
     summary: 'Generate music from text prompt',
     description:
-      'Generate an audio file from a text description. Returns the audio as a downloadable MP3 file. Requires authentication.',
+      'Generate an audio file from a text description and upload it to S3. Returns S3 URL and metadata. Requires authentication.',
   })
   @ApiBody({
     description: 'Music generation parameters',
@@ -73,12 +69,26 @@ export class MusicGeneratorController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Successfully generated music file',
-    content: {
-      'audio/mpeg': {
-        schema: {
+    description: 'Successfully generated music file and uploaded to S3',
+    schema: {
+      type: 'object',
+      properties: {
+        s3Url: {
           type: 'string',
-          format: 'binary',
+          description: 'S3 URL of the generated music file',
+        },
+        key: { type: 'string', description: 'S3 object key' },
+        bucket: { type: 'string', description: 'S3 bucket name' },
+        metadata: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            prompt: { type: 'string' },
+            lengthMs: { type: 'number' },
+            outputFormat: { type: 'string' },
+            modelId: { type: 'string' },
+            generatedAt: { type: 'string' },
+          },
         },
       },
     },
@@ -106,50 +116,26 @@ export class MusicGeneratorController {
   async generateMusic(
     @Body() generateMusicDto: GenerateMusicDto,
     @GetClerkId() clerkId: string,
-    @Res() res: Response,
   ) {
     try {
-      const { name, prompt, lengthMs } = generateMusicDto;
       // Zod validation handles all input validation automatically
 
       // TODO:
       // 1. Create Music record in database with status=GENERATING
-      // 2. Generate music with ElevenLabs
-      // 3. Upload audio stream to S3
-      // 4. Update Music record with audioUrl and status=COMPLETED
-      // 5. Return the Music record instead of streaming directly
+      // 2. Update Music record with audioUrl and status=COMPLETED after S3 upload
+      // 3. Associate music with user (clerkId)
 
-      const audioStream =
-        await this.musicGeneratorService.generateMusicFromPrompt(
-          prompt,
-          lengthMs,
-        );
+      const result =
+        await this.musicGeneratorService.generateMusic(generateMusicDto);
 
-      // Set appropriate headers for audio file
-      res.set({
-        'Content-Type': 'audio/mpeg',
-        'Content-Disposition': `attachment; filename="${name.replace(/[^a-zA-Z0-9]/g, '_')}.mp3"`,
-        'Transfer-Encoding': 'chunked',
-      });
-
-      // Pipe the stream directly to the response
-      audioStream.pipe(res);
-
-      // Handle stream errors
-      audioStream.on('error', (error) => {
-        console.error('Stream error:', error);
-        if (!res.headersSent) {
-          res.status(500).json({ error: 'Failed to generate music' });
-        }
-      });
+      return {
+        success: true,
+        data: result,
+        message: 'Music generated and uploaded successfully',
+      };
     } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        'Failed to generate music',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      this.logger.error('Error generating music:', error);
+      throw new InternalServerErrorException('Failed to generate music');
     }
   }
 }
