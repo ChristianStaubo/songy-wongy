@@ -1,6 +1,5 @@
 "use client";
 
-import { DashboardNav } from "./dashboard-nav";
 import { SongCreationForm } from "./song-creation-form";
 import { SongLibrary } from "./song-library";
 import { CreditsSection } from "./credits-section";
@@ -11,16 +10,9 @@ import { useEffect } from "react";
 interface DashboardProps {
   credits: number;
   songs: Song[];
-  userName: string;
-  onSignOut: () => void;
 }
 
-export function Dashboard({
-  credits,
-  songs,
-  userName,
-  onSignOut,
-}: DashboardProps) {
+export function Dashboard({ credits, songs }: DashboardProps) {
   const { getToken } = useAuth();
 
   // useEffect(() => {
@@ -37,33 +29,21 @@ export function Dashboard({
   //   fetchToken();
   // }, [getToken]); // Add getToken to dependency array
   return (
-    <div className="min-h-screen bg-gray-50">
-      <DashboardNav
-        credits={credits}
-        userName={userName}
-        onSignOut={onSignOut}
-      />
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* Song Creation Section */}
+      <div className="lg:col-span-2">
+        <SongCreationForm credits={credits} />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Song Creation Section */}
-          <div className="lg:col-span-2">
-            <SongCreationForm credits={credits} />
-
-            {/* Song Library */}
-            <div className="mt-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                Your Songs
-              </h2>
-              <SongLibrary songs={songs} />
-            </div>
-          </div>
-
-          {/* Credits & Purchase Section */}
-          <div className="lg:col-span-1">
-            <CreditsSection credits={credits} songsCount={songs.length} />
-          </div>
+        {/* Song Library */}
+        <div className="mt-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Your Songs</h2>
+          <SongLibrary songs={songs} />
         </div>
+      </div>
+
+      {/* Credits & Purchase Section */}
+      <div className="lg:col-span-1">
+        <CreditsSection credits={credits} songsCount={songs.length} />
       </div>
     </div>
   );

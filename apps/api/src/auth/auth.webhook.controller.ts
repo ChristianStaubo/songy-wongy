@@ -154,8 +154,27 @@ export class AuthWebhooksController {
       );
 
       try {
-        // Check if user already exists first
-        const existingUser = await this.usersService.findUserByClerkId(clerkId);
+        // Validate required data first
+        if (!clerkId) {
+          throw new Error('Clerk ID is required but not provided');
+        }
+
+        // Check if user already exists (handle database errors gracefully)
+        let existingUser = null;
+        try {
+          existingUser = await this.usersService.findUserByClerkId(clerkId);
+        } catch (findErr: any) {
+          this.logger.warn(
+            `Could not check for existing user with Clerk ID ${clerkId}. This might be expected during initial setup.`,
+            {
+              error: findErr.message,
+              code: findErr.code,
+            },
+          );
+          // Continue with user creation since we can't verify if user exists
+          // This handles cases like missing database tables during initial setup
+        }
+
         if (existingUser) {
           this.logger.log(
             `User with Clerk ID ${clerkId} already exists, skipping creation`,
@@ -163,21 +182,17 @@ export class AuthWebhooksController {
           return;
         }
 
-        // Validate required data
-        if (!clerkId) {
-          throw new Error('Clerk ID is required but not provided');
-        }
-
+        // Attempt to create the user
         await this.usersService.createUser({
           clerkId,
           email: primaryEmail,
           name: fullName,
         });
         this.logger.log(
-          `Processed user.created event for Clerk user: ${clerkId} with email: ${primaryEmail} and name: ${fullName}`,
+          `Successfully processed user.created event for Clerk user: ${clerkId} with email: ${primaryEmail} and name: ${fullName}`,
         );
       } catch (createErr: any) {
-        this.logger.error('Error creating user', {
+        this.logger.error('Error during user creation process', {
           error: createErr.message,
           code: createErr.code,
           meta: createErr.meta,

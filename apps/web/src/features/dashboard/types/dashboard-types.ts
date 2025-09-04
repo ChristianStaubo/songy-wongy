@@ -1,11 +1,7 @@
-export interface Song {
-  id: number;
-  title: string;
-  prompt: string;
-  thumbnail: string;
-  audioUrl: string;
-  createdAt: string;
-}
+import { UserMusicListResponse } from "@repo/types";
+
+// Use the music item type from the API response
+export type Song = UserMusicListResponse["music"][0];
 
 export interface DashboardState {
   credits: number;

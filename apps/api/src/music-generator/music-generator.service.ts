@@ -5,10 +5,13 @@ import {
   GenerateMusicDto,
   MusicGenerationRequestResponse,
   MusicStatusResponse,
+  MusicDownloadResponse,
+  UserMusicListResponse,
 } from '@repo/types';
 import { Readable } from 'stream';
 import { S3Service } from '../s3/s3.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { UsersService } from '../users/users.service';
 import { MusicGenerationRequestedEvent } from '../workers/events/music-generation-event';
 
 @Injectable()
@@ -22,6 +25,7 @@ export class MusicGeneratorService {
     private configService: ConfigService,
     private s3Service: S3Service,
     private prismaService: PrismaService,
+    private usersService: UsersService,
     private eventEmitter: EventEmitter2,
   ) {
     this.apiKey = this.configService.get<string>('ELEVENLABS_API_KEY');
@@ -46,13 +50,16 @@ export class MusicGeneratorService {
    */
   async requestMusicGeneration(
     options: GenerateMusicDto,
-    userId: string,
+    clerkId: string,
   ): Promise<MusicGenerationRequestResponse> {
     // TODO: Validate user has permission/credits for music generation
 
-    this.logger.log(`Creating music generation request for user: ${userId}`);
+    this.logger.log(`Creating music generation request for user: ${clerkId}`);
 
-    // Create Music record in database
+    // Get user by clerkId to get their database ID
+    const user = await this.usersService.getUserByClerkId(clerkId);
+
+    // Create Music record in database using the user's database ID
     const musicRecord = await this.prismaService.music.create({
       data: {
         name: options.name,
@@ -60,7 +67,7 @@ export class MusicGeneratorService {
         lengthMs: options.lengthMs || 10000, // Default to 10 seconds
         status: 'GENERATING',
         audioUrl: '', // Will be updated by worker
-        userId,
+        userId: user.id, // Use the database ID, not clerkId
       },
     });
 
@@ -70,7 +77,7 @@ export class MusicGeneratorService {
     const musicGenerationEvent: MusicGenerationRequestedEvent = {
       data: {
         musicId: musicRecord.id,
-        userId,
+        userId: clerkId, // Use clerkId for the event (worker will handle user lookup)
         name: options.name,
         prompt: options.prompt,
         lengthMs: options.lengthMs,
@@ -102,12 +109,15 @@ export class MusicGeneratorService {
    */
   async getMusicStatus(
     musicId: string,
-    userId: string,
+    clerkId: string,
   ): Promise<MusicStatusResponse> {
+    // Get user by clerkId to get their database ID
+    const user = await this.usersService.getUserByClerkId(clerkId);
+
     const music = await this.prismaService.music.findFirst({
       where: {
         id: musicId,
-        userId, // Ensure user can only access their own music
+        userId: user.id, // Use database ID for the foreign key
       },
     });
 
@@ -115,7 +125,7 @@ export class MusicGeneratorService {
       throw new Error('Music record not found');
     }
 
-    return {
+    const response: MusicStatusResponse = {
       musicId: music.id,
       name: music.name,
       prompt: music.prompt,
@@ -125,6 +135,8 @@ export class MusicGeneratorService {
       createdAt: music.createdAt.toISOString(),
       updatedAt: music.updatedAt.toISOString(),
     };
+
+    return response;
   }
 
   /**
@@ -311,5 +323,116 @@ export class MusicGeneratorService {
       return 'audio/wav';
     }
     return 'audio/mpeg'; // Default fallback
+  }
+
+  /**
+   * Get presigned download URL for a completed music track
+   */
+  async getDownloadUrl(
+    musicId: string,
+    clerkId: string,
+  ): Promise<MusicDownloadResponse> {
+    this.logger.log(
+      `Getting download URL for music ${musicId} by user ${clerkId}`,
+    );
+
+    // First, get the music record to verify ownership and get the S3 URL
+    const music = await this.getMusicStatus(musicId, clerkId);
+
+    if (music.status !== 'COMPLETED') {
+      throw new Error('Music file is not ready for download');
+    }
+
+    if (!music.audioUrl) {
+      throw new Error('Music file URL not found');
+    }
+
+    // Extract bucket and key from the S3 URL
+    // URL format: https://songy-wongy-music.s3.us-east-1.amazonaws.com/music/filename.mp3
+    const url = new URL(music.audioUrl);
+    const bucket = url.hostname.split('.')[0]; // Extract bucket name from hostname
+    const key = url.pathname.substring(1); // Remove leading slash
+
+    this.logger.log(
+      `Generating download URL for bucket: ${bucket}, key: ${key}`,
+    );
+
+    // Generate presigned download URL (expires in 1 hour)
+    const downloadUrl = await this.s3Service.getPresignedDownloadUrl(
+      bucket,
+      key,
+      3600, // 1 hour expiration
+    );
+
+    // Extract filename for suggested download name
+    const fileName = key.split('/').pop() || 'music.mp3';
+    const friendlyFileName =
+      fileName.replace(/_/g, ' ').replace('.mp3', '') + '.mp3';
+
+    return {
+      downloadUrl,
+      expiresIn: 3600,
+      fileName: friendlyFileName,
+    };
+  }
+
+  /**
+   * Get all music generated by a user with pagination
+   */
+  async getUserMusic(
+    clerkId: string,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<UserMusicListResponse> {
+    this.logger.log(
+      `Getting music for user ${clerkId}, page ${page}, limit ${limit}`,
+    );
+
+    // Get user from clerkId
+    const user = await this.usersService.getUserByClerkId(clerkId);
+
+    // Calculate skip for pagination
+    const skip = (page - 1) * limit;
+
+    // Get music records with pagination
+    const [music, total] = await Promise.all([
+      this.prismaService.music.findMany({
+        where: { userId: user.id },
+        select: {
+          id: true,
+          name: true,
+          prompt: true,
+          status: true,
+          lengthMs: true,
+          audioUrl: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prismaService.music.count({
+        where: { userId: user.id },
+      }),
+    ]);
+
+    const response: UserMusicListResponse = {
+      music: music.map((track) => ({
+        id: track.id,
+        name: track.name,
+        prompt: track.prompt,
+        status: track.status,
+        lengthMs: track.lengthMs,
+        audioUrl: track.audioUrl,
+        createdAt: track.createdAt.toISOString(),
+        updatedAt: track.updatedAt.toISOString(),
+      })),
+      total,
+      page,
+      limit,
+    };
+
+    return response;
   }
 }

@@ -1,13 +1,22 @@
-import { post } from '@/lib/fetch';
-import { GenerateMusicDto, MusicBufferResponse } from '@repo/types';
+import { get, post } from "@/lib/fetch";
+import {
+  GenerateMusicDto,
+  MusicBufferResponse,
+  MusicGenerationRequestResponse,
+  MusicStatusResponse,
+  MusicDownloadResponse,
+} from "@repo/types";
 
-export const generateMusic = async (data: GenerateMusicDto, token: string): Promise<MusicBufferResponse> => {
-  const response = await post<MusicBufferResponse, GenerateMusicDto>(
+export const generateMusic = async (
+  data: GenerateMusicDto,
+  token: string,
+): Promise<MusicGenerationRequestResponse> => {
+  const response = await post<MusicGenerationRequestResponse, GenerateMusicDto>(
     "/music-generator/generate",
     data,
     {
       token,
-    }
+    },
   );
 
   if (response.error) {
@@ -15,7 +24,7 @@ export const generateMusic = async (data: GenerateMusicDto, token: string): Prom
   }
 
   if (!response.data) {
-    throw new Error('No data returned from API');
+    throw new Error("No data returned from API");
   }
 
   return response.data;

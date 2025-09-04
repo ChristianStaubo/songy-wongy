@@ -3,7 +3,10 @@
 import { useState } from "react";
 import { useUser, useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { Dashboard, Song } from "@/features/dashboard";
+import { Dashboard, Song, DashboardLoading } from "@/features/dashboard";
+import { useGetUsersMusic } from "@/features/music/hooks";
+import { UserMusicListResponse } from "@repo/types";
+import { toast } from "sonner";
 
 export default function DashboardPage() {
   const { isSignedIn, user, isLoaded } = useUser();
@@ -12,31 +15,22 @@ export default function DashboardPage() {
 
   // Mock state for MVP
   const [credits, setCredits] = useState(5); // Mock user credits
-  const [songs, setSongs] = useState<Song[]>([
-    {
-      id: 1,
-      title: "Sunny Day Blues",
-      prompt: "A happy song about sunshine",
-      thumbnail: "/placeholder-song.jpg",
-      audioUrl: "#",
-      createdAt: "2024-01-15",
-    },
-    {
-      id: 2,
-      title: "Midnight Coding",
-      prompt: "A song about coding late at night",
-      thumbnail: "/placeholder-song.jpg",
-      audioUrl: "#",
-      createdAt: "2024-01-14",
-    },
-  ]);
 
-  if (!isLoaded) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Loading...</div>
-      </div>
-    );
+  // Fetch user's music using React Query
+  const {
+    data: musicData,
+    isLoading: isMusicLoading,
+    error: musicError,
+  } = useGetUsersMusic({
+    page: 1,
+    limit: 20, // Get more songs for better UX
+    enabled: isSignedIn && isLoaded,
+  });
+
+  console.log("Music data:", musicData); // Debug log to check structure
+
+  if (!isLoaded || isMusicLoading) {
+    return <DashboardLoading />;
   }
 
   // Redirect to home if not signed in
@@ -45,15 +39,16 @@ export default function DashboardPage() {
     return null;
   }
 
+  // Handle music loading error
+  if (musicError) {
+    console.error("Music loading error:", musicError);
+    // Show toast error notification
+    toast.error(musicError.message || "Failed to load your music library.");
+  }
+
+  // Extract songs from API response
+  const songs: Song[] = (musicData as UserMusicListResponse)?.music || [];
+
   // Main dashboard for authenticated users
-  return (
-    <Dashboard
-      credits={credits}
-      songs={songs}
-      userName={
-        user.firstName || user.emailAddresses?.[0]?.emailAddress || "User"
-      }
-      onSignOut={() => signOut()}
-    />
-  );
+  return <Dashboard credits={credits} songs={songs} />;
 }

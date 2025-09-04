@@ -136,33 +136,6 @@ npm run test:e2e -- --verbose
 - `app.integration-spec.ts` - Basic app and database connectivity tests
 - `s3.integration-spec.ts` - Comprehensive S3 service tests
 
-## S3 Test Coverage
-
-The S3 integration tests cover:
-
-- ✅ Presigned upload URL generation
-- ✅ Presigned download URL generation
-- ✅ Direct buffer uploads
-- ✅ Direct stream uploads
-- ✅ Object listing with prefixes
-- ✅ Object deletion
-- ✅ Error handling for invalid buckets/keys
-- ✅ Complete music generation workflow simulation
-
 ## Cleanup
 
-After running tests, stop the test services:
-
-```bash
-docker-compose -f docker-compose.test.yml down -v
-```
-
-The integration tests automatically clean up any S3 objects they create during testing.
-
-## Notes
-
-- Tests use **real AWS S3** for maximum reliability
-- Each test run creates unique object keys to avoid conflicts
-- All test objects are automatically cleaned up after tests complete
-- Tests are designed to run in parallel safely
-- Database is cleaned between test runs
+The script will tear down the docker volumes, cleaning up any resources

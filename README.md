@@ -1,135 +1,82 @@
-# Turborepo starter
+# Songy Wongy
 
-This Turborepo starter is maintained by the Turborepo core team.
+A music generation platform built with a modern monorepo architecture for maximum development velocity and type safety.
 
-## Using this example
+## Architecture
 
-Run the following command:
+This Turborepo monorepo shares types across all platforms to prevent API drift and ensure consistency:
 
-```sh
-npx create-turbo@latest
+### Apps
+
+- `web`: Next.js frontend
+- `api`: NestJS backend with Prisma, PostgreSQL, Redis, and BullMQ
+- `mobile`: React Native
+
+### Shared Packages
+
+- `@repo/types`: Shared TypeScript types and Zod schemas across frontend, backend, and mobile
+- `@repo/ui`: Reusable React component library
+- `@repo/eslint-config`: ESLint configurations
+- `@repo/typescript-config`: TypeScript configurations
+
+- **Type Safety**: Shared Zod schemas ensure frontend, backend, and mobile never drift with differing types
+- **Development Velocity**: Independent deployment pipelines and shared tooling
+- **Code Reuse**: Frontend and mobile share React Query hooks and business logic
+- **Unified State Management**: Consistent data fetching and caching across platforms
+
+## Development
+
+### Prerequisites
+
+- Node.js 18+
+- Docker & Docker Compose
+- Yarn package manager
+
+### Quick Start
+
+```bash
+# Install dependencies
+yarn install
+
+# Start all services (frontend + backend + database)
+yarn run dev
+
+# Clean shutdown and restart (runs docker-compose down)
+yarn clean
+yarn run dev
 ```
 
-## What's inside?
+## Deployment
 
-This Turborepo includes the following packages/apps:
+Each app has independent deployment pipelines for maximum velocity:
 
-### Apps and Packages
+- **Frontend (`web`)**: Deployed to Vercel with automatic previews on PRs
+- **Backend (`api`)**: Deployed to production infrastructure with Docker
+- **Shared packages**: Automatically built and cached across deployments
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+### Git Hooks (Husky)
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+Pre-commit and pre-push hooks ensure code quality:
 
-### Utilities
+- **Pre-commit**: Formats staged files and runs linters
+- **Pre-push**: Type checking (blocks) and tests (warns)
 
-This Turborepo has some additional tools already setup for you:
+## Tech Stack
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
+- **Frontend**: Next.js
+- **Backend**: NestJS, Prisma, PostgreSQL, Redis, BullMQ
+- **Mobile**: React Native
+- **Shared**: TypeScript, Zod, ESLint, Prettier
+- **Infrastructure**: Docker, GitHub Actions
+- **Tools**: Turborepo, Husky
 
-### Build
+## Roadmap
 
-To build all apps and packages, run the following command:
+### MVP 1 (Current)
 
-```
-cd my-turborepo
+- Frontend, mobile and backend with music generation APIs
 
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
+### MVP 2
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
-```
-
-You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
-
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
-
-### Develop
-
-To develop all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
-
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
-- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
+- Self-hosted music generation models with Modal for serverless GPU compute
+- Cold start optimization for on-demand model inference

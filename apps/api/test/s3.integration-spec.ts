@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 
-// Helper function to check if AWS credentials are available
 const hasAwsCredentials = () => {
   const awsVars = [
     'AWS_S3_REGION',
@@ -14,14 +13,13 @@ const hasAwsCredentials = () => {
   return awsVars.every((varName) => process.env[varName]);
 };
 
-// Conditionally run S3 tests only if AWS credentials are available
 const describeS3 = hasAwsCredentials() ? describe : describe.skip;
 
 describeS3('S3Service Integration Tests', () => {
   let s3Service: S3Service;
   let configService: ConfigService;
   let testBucket: string;
-  const testObjects: string[] = []; // Track objects for cleanup
+  const testObjects: string[] = [];
 
   beforeAll(() => {
     s3Service = global.testApp.get<S3Service>(S3Service);
@@ -53,9 +51,9 @@ describeS3('S3Service Integration Tests', () => {
     it('should generate a valid presigned upload URL', async () => {
       const testKey = `test-uploads/${crypto.randomUUID()}.txt`;
       const contentType = 'text/plain';
-      const expiresIn = 300; // 5 minutes
+      const expiresIn = 300; // 5 minutes, default for presigned urls
 
-      testObjects.push(testKey); // Track for cleanup
+      testObjects.push(testKey); // Track for cleanup for s3 because we use actual aws resources
 
       const presignedUrl = await s3Service.getPresignedUploadUrl(
         testBucket,
@@ -64,10 +62,9 @@ describeS3('S3Service Integration Tests', () => {
         expiresIn,
       );
 
-      // Validate the URL structure
       expect(presignedUrl).toBeTruthy();
       expect(presignedUrl).toContain(testBucket);
-      expect(presignedUrl).toContain(testKey); // Key appears in path, not URL-encoded
+      expect(presignedUrl).toContain(testKey);
       expect(presignedUrl).toContain('X-Amz-Algorithm=AWS4-HMAC-SHA256');
       expect(presignedUrl).toContain('X-Amz-Credential');
       expect(presignedUrl).toContain('X-Amz-Signature');
@@ -83,7 +80,6 @@ describeS3('S3Service Integration Tests', () => {
 
       testObjects.push(testKey); // Track for cleanup
 
-      // Upload test file
       const uploadedUrl = await s3Service.uploadBuffer(
         testBucket,
         testKey,
@@ -104,15 +100,13 @@ describeS3('S3Service Integration Tests', () => {
         300, // 5 minutes
       );
 
-      // Validate the URL structure
       expect(presignedDownloadUrl).toBeTruthy();
       expect(presignedDownloadUrl).toContain(testBucket);
-      expect(presignedDownloadUrl).toContain(testKey); // Key appears in path, not URL-encoded
+      expect(presignedDownloadUrl).toContain(testKey);
       expect(presignedDownloadUrl).toContain(
         'X-Amz-Algorithm=AWS4-HMAC-SHA256',
       );
 
-      // Test that we can actually fetch the content
       const response = await fetch(presignedDownloadUrl);
       expect(response.ok).toBe(true);
 
@@ -201,7 +195,6 @@ describeS3('S3Service Integration Tests', () => {
 
       testObjects.push(testKey);
 
-      // Create a readable stream from the test content
       const { Readable } = await import('stream');
       const testStream = Readable.from([testContent]);
 
@@ -217,7 +210,6 @@ describeS3('S3Service Integration Tests', () => {
       expect(s3Url).toContain(testBucket);
       expect(s3Url).toContain(testKey);
 
-      // Verify the file was uploaded correctly
       const downloadUrl = await s3Service.getPresignedDownloadUrl(
         testBucket,
         testKey,
@@ -236,7 +228,6 @@ describeS3('S3Service Integration Tests', () => {
       const testPrefix = `test-list-objects/${crypto.randomUUID()}`;
       const testFiles = ['file1.txt', 'file2.txt', 'subfolder/file3.txt'];
 
-      // Upload test files
       for (const fileName of testFiles) {
         const key = `${testPrefix}/${fileName}`;
         testObjects.push(key);
@@ -250,7 +241,6 @@ describeS3('S3Service Integration Tests', () => {
         );
       }
 
-      // List objects with prefix
       const objects = await s3Service.listObjects(testBucket, testPrefix);
 
       expect(objects).toBeTruthy();
@@ -298,7 +288,6 @@ describeS3('S3Service Integration Tests', () => {
       expect(responseAfterDelete.status).toBe(404);
 
       console.log('✅ Successfully deleted object');
-      // Don't add to testObjects since we already deleted it
     }, 10000);
   });
 
@@ -307,8 +296,6 @@ describeS3('S3Service Integration Tests', () => {
       const invalidBucket = 'this-bucket-definitely-does-not-exist-12345';
       const testKey = 'test.txt';
 
-      // Note: AWS generates presigned URLs even for non-existent buckets
-      // The error occurs when you try to use the URL, not when generating it
       const presignedUrl = await s3Service.getPresignedUploadUrl(
         invalidBucket,
         testKey,
@@ -326,7 +313,6 @@ describeS3('S3Service Integration Tests', () => {
     it('should handle invalid object key for download', async () => {
       const nonExistentKey = `non-existent/${crypto.randomUUID()}.txt`;
 
-      // This should not throw, but the resulting URL should return 404
       const downloadUrl = await s3Service.getPresignedDownloadUrl(
         testBucket,
         nonExistentKey,
@@ -365,7 +351,6 @@ describeS3('S3Service Integration Tests', () => {
 
       testObjects.push(testKey);
 
-      // Upload the "generated" music file
       const s3Url = await s3Service.uploadBuffer(
         testBucket,
         testKey,
@@ -378,7 +363,6 @@ describeS3('S3Service Integration Tests', () => {
       expect(s3Url).toContain(testBucket);
       expect(s3Url).toContain(testKey);
 
-      // Generate a download URL for the music file
       const downloadUrl = await s3Service.getPresignedDownloadUrl(
         testBucket,
         testKey,
@@ -386,7 +370,6 @@ describeS3('S3Service Integration Tests', () => {
       );
       expect(downloadUrl).toBeTruthy();
 
-      // Verify we can download the file
       const response = await fetch(downloadUrl);
       expect(response.ok).toBe(true);
       expect(response.headers.get('content-type')).toBe(contentType);

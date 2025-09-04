@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -8,6 +8,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { CreditsDisplay } from "@/features/credits";
+import { toast } from "sonner";
 
 interface CreditsSectionProps {
   credits: number;
@@ -15,30 +17,37 @@ interface CreditsSectionProps {
 }
 
 export function CreditsSection({ credits, songsCount }: CreditsSectionProps) {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handlePurchaseCredits = async (packageId: string) => {
+    setIsLoading(true);
+    try {
+      // TODO: Implement Stripe checkout integration
+      console.log("Purchasing credits for package:", packageId);
+
+      // Simulate API call for now
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      toast.success("Redirecting to Stripe checkout...");
+
+      // TODO: Redirect to Stripe checkout URL
+      // window.location.href = checkoutUrl;
+    } catch (error) {
+      console.error("Purchase failed:", error);
+      toast.error("Failed to initiate purchase. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">💎 Credits</CardTitle>
-          <CardDescription>
-            Each song costs 1 credit to generate
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="text-center">
-            <div className="text-3xl font-bold text-red-600">{credits}</div>
-            <div className="text-sm text-gray-600">credits remaining</div>
-          </div>
-
-          <Button className="w-full bg-red-600 hover:bg-red-700" size="lg">
-            Buy 10 Credits - $9.99
-          </Button>
-
-          <div className="text-xs text-gray-500 text-center">
-            Secure payment powered by Stripe
-          </div>
-        </CardContent>
-      </Card>
+      <CreditsDisplay
+        credits={credits}
+        songsCount={songsCount}
+        onPurchaseCredits={handlePurchaseCredits}
+        isLoading={isLoading}
+      />
 
       {/* Quick Stats */}
       <Card>

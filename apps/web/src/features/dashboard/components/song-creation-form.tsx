@@ -2,9 +2,7 @@
 
 import { useForm, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { GenerateMusicDto, generateMusicDto } from "@repo/types";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -16,8 +14,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
-import { useGenerateMusic } from "../../music/hooks/use-generate-music";
-import { useState } from "react";
+import { useMusicGenerationFlow } from "../../music/hooks/use-music-generation-flow";
+import { CreateSongFormSubmitButton } from "./create-song-form-submit-button";
+import { AudioPlayer } from "./audio-player";
 
 interface SongCreationFormProps {
   credits: number;
@@ -27,8 +26,6 @@ interface SongCreationFormProps {
 type FormData = GenerateMusicDto;
 
 export function SongCreationForm({ credits }: SongCreationFormProps) {
-  const [generatedAudio, setGeneratedAudio] = useState<string | null>(null);
-
   const {
     register,
     handleSubmit,
@@ -45,32 +42,22 @@ export function SongCreationForm({ credits }: SongCreationFormProps) {
     },
   });
 
-  const { mutate: generateMusic, isPending: isGenerating } = useGenerateMusic();
+  const {
+    startGeneration,
+    isGenerating,
+    isPolling,
+    status,
+    progress,
+    reset: resetGeneration,
+  } = useMusicGenerationFlow();
 
   // Watch lengthMs for the slider
   const lengthMs = watch("lengthMs") || 30000;
 
   const onSubmit: SubmitHandler<FormData> = (formData) => {
-    generateMusic(formData, {
-      onSuccess: (response) => {
-        console.log("Music generated successfully:", response);
-
-        // Convert base64 to audio URL for playback
-        const audioBlob = new Blob(
-          [Uint8Array.from(atob(response.audioBase64), (c) => c.charCodeAt(0))],
-          { type: "audio/mpeg" }
-        );
-        const audioUrl = URL.createObjectURL(audioBlob);
-        setGeneratedAudio(audioUrl);
-
-        // Reset form after successful generation
-        reset();
-      },
-      onError: (error) => {
-        console.error("Component onError callback:", error);
-        // Hook already shows error toast
-      },
-    });
+    startGeneration(formData);
+    // Reset form after starting generation
+    reset();
   };
 
   const formatDuration = (ms: number) => {
@@ -146,17 +133,16 @@ export function SongCreationForm({ credits }: SongCreationFormProps) {
             )}
           </div>
 
-          {/* Generated Audio Player */}
-          {generatedAudio && (
-            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-              <Label className="text-green-800 font-medium">
-                🎵 Your Generated Song:
-              </Label>
-              <audio controls className="w-full mt-2">
-                <source src={generatedAudio} type="audio/mpeg" />
-                Your browser does not support the audio element.
-              </audio>
-            </div>
+          {/* Audio Player */}
+          {status === "COMPLETED" && !!progress?.downloadUrl && (
+            <AudioPlayer
+              downloadUrl={progress!.downloadUrl}
+              fileName={progress?.fileName ?? "song.mp3"}
+              onCreateAnother={() => {
+                reset();
+                resetGeneration();
+              }}
+            />
           )}
 
           {/* Submit Section */}
@@ -164,13 +150,11 @@ export function SongCreationForm({ credits }: SongCreationFormProps) {
             <div className="text-sm text-gray-600">
               Cost: 1 credit • You have {credits} credits
             </div>
-            <Button
-              type="submit"
-              disabled={credits < 1 || isGenerating}
-              className="min-w-[120px] bg-red-600 hover:bg-red-700 disabled:opacity-50"
-            >
-              {isGenerating ? "Generating..." : "Create Song"}
-            </Button>
+            <CreateSongFormSubmitButton
+              credits={credits}
+              isGenerating={isGenerating}
+              isPolling={isPolling}
+            />
           </div>
 
           {credits < 1 && (

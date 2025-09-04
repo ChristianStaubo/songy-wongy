@@ -1,0 +1,6 @@
+# Run lint-staged to format staged files
+npx lint-staged
+
+# Run linting on the affected workspaces (warnings only, don't fail commit)
+echo "🔍 Running linters..."
+npm run lint || echo "⚠️ Linting issues found - please review and fix when possible"

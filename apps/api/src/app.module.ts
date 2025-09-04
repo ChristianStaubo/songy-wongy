@@ -48,7 +48,6 @@ import { CacheModule } from '@nestjs/cache-manager';
         REDIS_PASSWORD: Joi.string().optional(),
       }),
     }),
-
     CacheModule.registerAsync({
       useFactory: async (configService: ConfigService) => {
         try {

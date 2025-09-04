@@ -1,0 +1,16 @@
+echo "🔍 Running type checks..."
+if ! npm run check-types; then
+  echo "❌ Type check failed! Please fix type errors before pushing."
+  exit 1
+fi
+
+echo "🧪 Running integration tests..."
+# Run integration tests (spins up services automatically)
+cd apps/api
+if ! npm run test:integration; then
+  echo "❌ Integration tests failed! Please fix failing tests before pushing."
+  exit 1
+fi
+cd ../../
+
+echo "✅ Pre-push checks completed! All tests passed :)"

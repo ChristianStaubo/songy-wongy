@@ -6,7 +6,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
     ports:
-      - '5432:5432'
+      - '5432:5432' # Keep for local development
+      - '5342:5432' # Additional port for Docker database access
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -32,7 +33,7 @@ services:
   app:
     build:
       context: ../..
-      dockerfile: apps/api/Dockerfile
+      dockerfile: apps/api/Dockerfile.dev
       args:
         APP: api
     ports:
@@ -44,7 +45,9 @@ services:
         condition: service_healthy
     env_file:
       - .env
-
+    environment:
+      # Only override database URL for Docker networking
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/songy_wongy_db
     working_dir: /app
     command: yarn workspace api start:dev
     volumes:
