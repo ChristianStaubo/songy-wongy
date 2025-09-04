@@ -1,6 +1,6 @@
 # Songy Wongy
 
-A music generation platform built with a modern monorepo architecture for maximum development velocity and type safety.
+A music generation platform built with a modern monorepo architecture for maximum development velocity and type safety across frontend, backend, and mobile. Custom music generation model on modal for cheaper inference, with higher quality hosted models for speed and quality.
 
 ## Architecture
 
@@ -29,8 +29,8 @@ This Turborepo monorepo shares types across all platforms to prevent API drift a
 ### Prerequisites
 
 - Node.js 18+
-- Docker & Docker Compose
-- Yarn package manager
+- Docker
+- Yarn
 
 ### Quick Start
 
