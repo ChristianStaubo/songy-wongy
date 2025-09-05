@@ -1,0 +1,34 @@
+{
+  // ESLint Configuration - Ensure errors show as errors, not warnings
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact"
+  ],
+  "eslint.format.enable": true,
+  "eslint.lintTask.enable": true,
+
+  // Force ESLint to respect error levels (don't downgrade to warnings)
+  "eslint.rules.customizations": [],
+
+  // Make sure ESLint runs on TypeScript files
+  "eslint.probe": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact",
+    "html",
+    "vue",
+    "markdown"
+  ],
+
+  // Auto-fix on save
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+
+  // TypeScript settings to work well with ESLint
+  "typescript.preferences.includePackageJsonAutoImports": "off",
+  "typescript.suggest.autoImports": false
+}

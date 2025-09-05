@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
@@ -14,51 +8,147 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Example models - you can modify these
 model User {
-  id        String   @id @default(cuid())
-  clerkId   String   @unique
-  email     String?  @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  posts     Post[]
-  music     Music[]
-}
+  id              String    @id @default(cuid())
+  clerkId         String    @unique
+  email           String?   @unique
+  name            String?
+  creditBalance   Decimal   @default(0) @db.Decimal(10, 4) // CACHED credit balance (computed from transactions)
+  freeTrialUsedAt DateTime? // When free trial was used (null = not used yet)
+  deletedAt       DateTime? // Soft delete timestamp
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-model Post {
-  id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
-  author    User     @relation(fields: [authorId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // Relations
+  music        Music[]
+  transactions Transaction[]
+
+  @@index([deletedAt])
+  @@index([freeTrialUsedAt])
 }
 
 model Music {
-  id       String      @id @default(cuid())
-  name     String // User-provided name for the music
-  prompt   String // The original prompt used to generate the music
-  audioUrl String // S3 URL to the MP3 file
-  lengthMs Int // Length of the music in milliseconds
-  status   MusicStatus @default(GENERATING)
+  id           String      @id @default(cuid())
+  name         String
+  prompt       String
+  audioUrl     String?
+  thumbnailUrl String?
+  lengthMs     Int?
+  status       MusicStatus @default(GENERATING)
+  creditsUsed  Decimal     @db.Decimal(10, 4)
+  provider     AIProvider  @default(ELEVENLABS)
 
   // User relationship
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Metadata
+  // Transaction relationship (for auditing)
+  transactionId String?      @unique
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+
+  metadata  Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([createdAt])
+  @@index([status])
+}
+
+model Transaction {
+  id          String            @id @default(cuid())
+  type        TransactionType
+  amount      Decimal           @db.Decimal(10, 4)
+  description String
+  status      TransactionStatus @default(PENDING)
+
+  // User relationship - DON'T cascade delete transactions (preserve audit trail)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  music     Music?
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id])
+
+  // Payment details (for purchases)
+  stripePaymentIntentId String? // Stripe payment intent ID
+  stripeWebhookId       String? // For webhook deduplication
+  amountPaidCents       Int? // Amount paid in cents (USD)
+
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@index([stripePaymentIntentId])
+  @@index([stripeWebhookId])
+}
+
+model Product {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  credits     Decimal @db.Decimal(10, 4)
+  priceUsd    Int
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  stripePriceId   String? @unique
+  stripeProductId String? @unique
+
+  transactions Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([sortOrder])
+}
+
+model PricingTier {
+  id          String     @id @default(cuid())
+  provider    AIProvider
+  name        String
+  description String?
+
+  creditsPerMinute Decimal @db.Decimal(10, 4)
+  isActive         Boolean @default(true)
+  isDefault        Boolean @default(false)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, isDefault])
+  @@index([provider])
+  @@index([isActive])
+  @@index([isDefault])
 }
 
 enum MusicStatus {
-  GENERATING // Currently being generated
-  COMPLETED // Successfully generated and uploaded
-  FAILED // Generation or upload failed
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+enum AIProvider {
+  ELEVENLABS
+  SELFHOSTED
+}
+
+enum TransactionType {
+  PURCHASE
+  DEDUCTION
+  REFUND
+  TRIAL
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
 }

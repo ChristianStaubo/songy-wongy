@@ -92,6 +92,7 @@ export class AuthWebhooksController {
       });
       this.logger.log('Webhook verification succeeded.');
       this.logger.log(`Verified event: ${JSON.stringify(evt)}`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       this.logger.error('Webhook verification failed', err);
       return res.status(400).json({
@@ -128,6 +129,7 @@ export class AuthWebhooksController {
       // Extract email from primary email address
       const primaryEmail =
         email_addresses?.find(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (email: any) => email.id === primary_email_address_id,
         )?.email_address || email_addresses?.[0]?.email_address;
 
@@ -163,6 +165,7 @@ export class AuthWebhooksController {
         let existingUser = null;
         try {
           existingUser = await this.usersService.findUserByClerkId(clerkId);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (findErr: any) {
           this.logger.warn(
             `Could not check for existing user with Clerk ID ${clerkId}. This might be expected during initial setup.`,
@@ -191,6 +194,7 @@ export class AuthWebhooksController {
         this.logger.log(
           `Successfully processed user.created event for Clerk user: ${clerkId} with email: ${primaryEmail} and name: ${fullName}`,
         );
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (createErr: any) {
         this.logger.error('Error during user creation process', {
           error: createErr.message,

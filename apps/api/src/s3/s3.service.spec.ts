@@ -135,13 +135,13 @@ describe('S3Service Unit Tests', () => {
   describe('Content Type Helpers', () => {
     it('should return correct content types for audio files', () => {
       const audioExtensions = {
-        'mp3': 'audio/mpeg',
-        'wav': 'audio/wav',
-        'flac': 'audio/flac',
-        'm4a': 'audio/mp4',
+        mp3: 'audio/mpeg',
+        wav: 'audio/wav',
+        flac: 'audio/flac',
+        m4a: 'audio/mp4',
       };
 
-      Object.entries(audioExtensions).forEach(([ext, expectedType]) => {
+      Object.entries(audioExtensions).forEach(([, expectedType]) => {
         // This is a conceptual test - the actual implementation would need
         // a helper method to determine content type from file extension
         expect(expectedType).toContain('audio/');
@@ -149,9 +149,8 @@ describe('S3Service Unit Tests', () => {
     });
 
     it('should handle unknown file extensions gracefully', () => {
-      const unknownExtension = 'xyz';
       const defaultContentType = 'application/octet-stream';
-      
+
       // This would be the fallback behavior
       expect(defaultContentType).toBe('application/octet-stream');
     });
@@ -162,9 +161,9 @@ describe('S3Service Unit Tests', () => {
       const region = 'us-east-1';
       const bucket = 'test-bucket';
       const key = 'music/test-file.mp3';
-      
+
       const expectedUrl = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
-      
+
       expect(expectedUrl).toContain('https://');
       expect(expectedUrl).toContain(bucket);
       expect(expectedUrl).toContain('s3');
@@ -176,7 +175,7 @@ describe('S3Service Unit Tests', () => {
     it('should handle URL encoding for special characters in keys', () => {
       const keyWithSpaces = 'music/my song.mp3';
       const encodedKey = encodeURIComponent(keyWithSpaces);
-      
+
       expect(encodedKey).not.toContain(' ');
       expect(encodedKey).toContain('music%2Fmy%20song.mp3');
     });
@@ -205,10 +204,10 @@ describe('S3Service Unit Tests', () => {
       invalidBucketNames.forEach((bucketName) => {
         // These would fail S3 bucket name validation
         expect(
-          bucketName === '' || 
-          bucketName.length < 3 || 
-          /[A-Z_]/.test(bucketName) ||
-          bucketName.includes('..')
+          bucketName === '' ||
+            bucketName.length < 3 ||
+            /[A-Z_]/.test(bucketName) ||
+            bucketName.includes('..'),
         ).toBe(true);
       });
     });

@@ -50,7 +50,7 @@ export class S3Service {
     bucket: string,
     key: string,
     contentType: string,
-    expiresIn: number = 3600, // Default to 1 hour
+    expiresIn = 3600, // Default to 1 hour
   ): Promise<string> {
     const command = new PutObjectCommand({
       Bucket: bucket,
@@ -77,7 +77,7 @@ export class S3Service {
   async getPresignedDownloadUrl(
     bucket: string,
     key: string,
-    expiresIn: number = 3600, // Default to 1 hour
+    expiresIn = 3600, // Default to 1 hour
   ): Promise<string> {
     const command = new GetObjectCommand({
       Bucket: bucket,

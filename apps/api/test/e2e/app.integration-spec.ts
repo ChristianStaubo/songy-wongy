@@ -34,13 +34,14 @@ describe('App Integration Tests - Basic Setup', () => {
         data: {
           id: 'test-user-basic-check',
           clerkId: 'clerk_test_user_123',
-          email: 'test@example.com',
+          email: `test-basic-${Date.now()}@example.com`,
           name: 'Test User',
         },
       });
 
       expect(testUser.id).toBe('test-user-basic-check');
-      expect(testUser.email).toBe('test@example.com');
+      expect(testUser.email).toContain('test-basic-');
+      expect(testUser.email).toContain('@example.com');
       expect(testUser.clerkId).toBe('clerk_test_user_123');
 
       // Clean up the test user

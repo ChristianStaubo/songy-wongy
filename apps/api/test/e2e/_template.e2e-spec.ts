@@ -1,5 +1,6 @@
 import * as globals from '@jest/globals';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { Decimal } from '@prisma/client/runtime/library';
 // Import other services as needed
 // import { SomeService } from '../../src/some/some.service';
 
@@ -97,7 +98,21 @@ globals.describe('ServiceName E2E Tests', () => {
         },
       });
 
-      // Act - Step 2: Create music for user
+      // Act - Step 2: Create transaction for music purchase
+      const transaction = await prisma.transaction.create({
+        data: {
+          id: 'test-transaction-id',
+          userId: user.id,
+          type: 'PURCHASE',
+          amount: new Decimal(10),
+          description: 'Test transaction',
+          status: 'COMPLETED',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+
+      // Act - Step 3: Create music for user
       const music = await prisma.music.create({
         data: {
           id: musicId,
@@ -107,10 +122,16 @@ globals.describe('ServiceName E2E Tests', () => {
           lengthMs: 30000,
           status: 'COMPLETED',
           userId: user.id,
+          creditsUsed: 1,
+          provider: 'ELEVENLABS',
+          transactionId: transaction.id,
+          metadata: { test: 'test' },
+          createdAt: new Date(),
+          updatedAt: new Date(),
         },
       });
 
-      // Act - Step 3: Query relationship
+      // Act - Step 4: Query relationship
       const userWithMusic = await prisma.user.findUnique({
         where: { id: userId },
         include: { music: true },

@@ -59,8 +59,7 @@ export class MusicGenerationProcessor extends WorkerHost {
   }
 
   private async generateMusic(job: Job<GenerateMusicJobData, string>) {
-    const { musicId, userId, name, prompt, lengthMs, outputFormat, modelId } =
-      job.data;
+    const { musicId, userId, name, prompt, lengthMs } = job.data;
 
     this.logger.log(
       `🎵 Generating music for music ID: ${musicId} with prompt: "${prompt}"`,

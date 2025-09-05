@@ -52,12 +52,18 @@ export class MusicGeneratorService {
     options: GenerateMusicDto,
     clerkId: string,
   ): Promise<MusicGenerationRequestResponse> {
-    // TODO: Validate user has permission/credits for music generation
-
     this.logger.log(`Creating music generation request for user: ${clerkId}`);
 
     // Get user by clerkId to get their database ID
     const user = await this.usersService.getUserByClerkId(clerkId);
+
+    // Calculate estimated credits needed (1 credit per minute, rounded up)
+    const estimatedCredits = Math.ceil((options.lengthMs || 10000) / 60000);
+
+    // TODO: Implement credit balance validation and deduction transaction creation
+    // - Check if user has sufficient credits
+    // - Create DEDUCTION transaction
+    // - Link transaction to music record
 
     // Create Music record in database using the user's database ID
     const musicRecord = await this.prismaService.music.create({
@@ -66,8 +72,10 @@ export class MusicGeneratorService {
         prompt: options.prompt,
         lengthMs: options.lengthMs || 10000, // Default to 10 seconds
         status: 'GENERATING',
-        audioUrl: '', // Will be updated by worker
+        audioUrl: null, // Will be updated by worker when generation completes
         userId: user.id, // Use the database ID, not clerkId
+        creditsUsed: estimatedCredits,
+        // transactionId will be set when credit deduction transaction is created
       },
     });
 
@@ -232,6 +240,7 @@ export class MusicGeneratorService {
       }
 
       // Build request body
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const requestBody: any = {
         model_id: modelId,
       };
@@ -276,6 +285,7 @@ export class MusicGeneratorService {
       }
 
       // Convert Web ReadableStream to Node.js Readable stream
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return Readable.fromWeb(response.body as any);
     } catch (error) {
       this.logger.error('Failed to generate music:', error);
@@ -381,8 +391,8 @@ export class MusicGeneratorService {
    */
   async getUserMusic(
     clerkId: string,
-    page: number = 1,
-    limit: number = 10,
+    page = 1,
+    limit = 10,
   ): Promise<UserMusicListResponse> {
     this.logger.log(
       `Getting music for user ${clerkId}, page ${page}, limit ${limit}`,

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersService } from './users.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { Decimal } from '@prisma/client/runtime/library';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -37,6 +38,9 @@ describe('UsersService', () => {
         clerkId: 'clerk-123',
         email: 'test@example.com',
         name: 'Test User',
+        creditBalance: new Decimal(0),
+        freeTrialUsedAt: null,
+        deletedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -67,6 +71,9 @@ describe('UsersService', () => {
         clerkId: 'clerk-123',
         email: 'test@example.com',
         name: 'Test User',
+        creditBalance: new Decimal(0),
+        freeTrialUsedAt: null,
+        deletedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };

@@ -1,6 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  InternalServerErrorException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from '@repo/types';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -52,6 +58,8 @@ export class UsersService {
    * Create a new user in the database
    * @param data - User creation data from Clerk webhook
    * @returns Created user record
+   * @throws BadRequestException for Prisma/database errors
+   * @throws InternalServerErrorException for unexpected errors
    */
   async createUser(data: CreateUserDto) {
     this.logger.log(
@@ -69,18 +77,22 @@ export class UsersService {
 
       this.logger.log(`Successfully created user with ID: ${user.id}`);
       return user;
-    } catch (error: any) {
+    } catch (error) {
       this.logger.error(
         `Failed to create user with Clerk ID: ${data.clerkId}`,
-        {
-          error: error.message,
-          code: error.code,
-          meta: error.meta,
-          constraint: error.constraint,
-          detail: error.detail,
-        },
+        { error: error.message },
       );
-      throw error;
+
+      // If it's a Prisma error, it's likely a client issue (bad data, constraints)
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError ||
+        error instanceof Prisma.PrismaClientValidationError
+      ) {
+        throw new BadRequestException('Failed to create user');
+      }
+
+      // Everything else is a server error
+      throw new InternalServerErrorException('Internal server error');
     }
   }
 }
