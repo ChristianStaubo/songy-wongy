@@ -60,6 +60,7 @@ export class MusicGeneratorService {
     const user = await this.usersService.getUserByClerkId(clerkId);
 
     // Calculate credits needed using CreditsService
+    // TODO: Move this into a utility (pure) function
     const lengthMs = options.lengthMs || 10000;
     const creditsNeeded = await this.creditsService.calculateCreditsNeeded(
       lengthMs,
@@ -119,33 +120,37 @@ export class MusicGeneratorService {
     lengthMs: number,
     creditsNeeded: number,
   ) {
-    // Deduct credits first (this runs in its own transaction)
-    const transaction = await this.creditsService.deductCredits(
-      user.id,
-      creditsNeeded,
-      `Music generation: ${options.name}`,
-    );
+    // Atomic transaction: deduct credits and create music record
+    return await this.prismaService.$transaction(async (tx) => {
+      // Deduct credits using the transaction context
+      const transaction = await this.creditsService.deductCreditsWithTx(
+        tx,
+        user.id,
+        creditsNeeded,
+        `Music generation: ${options.name}`,
+      );
 
-    // Create music record linked to transaction
-    const music = await this.prismaService.music.create({
-      data: {
-        name: options.name,
-        prompt: options.prompt,
-        lengthMs: lengthMs,
-        status: 'GENERATING',
-        audioUrl: null, // Will be updated by worker when generation completes
-        userId: user.id,
-        creditsUsed: creditsNeeded,
-        provider: 'ELEVENLABS',
-        transactionId: transaction.id,
-      },
+      // Create music record in the same transaction
+      const music = await tx.music.create({
+        data: {
+          name: options.name,
+          prompt: options.prompt,
+          lengthMs: lengthMs,
+          status: 'GENERATING',
+          audioUrl: null,
+          userId: user.id,
+          creditsUsed: creditsNeeded,
+          provider: 'ELEVENLABS',
+          transactionId: transaction.id,
+        },
+      });
+
+      this.logger.log(
+        `✅ Credits deducted and music record created: ${creditsNeeded} credits for music ID ${music.id}`,
+      );
+
+      return music;
     });
-
-    this.logger.log(
-      `✅ Credits deducted and music record created: ${creditsNeeded} credits for music ID ${music.id}`,
-    );
-
-    return music;
   }
 
   /**

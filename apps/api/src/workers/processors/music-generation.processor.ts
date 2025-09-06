@@ -40,23 +40,30 @@ export class MusicGenerationProcessor extends WorkerHost {
         error.message,
       );
 
-      // Handle credit refund and status update in atomic transaction
-      await this.handleGenerationFailure(job.data.musicId, job.data.userId);
+      // Only refund and mark FAILED on the final attempt
+      const isFinalAttempt = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
+      if (isFinalAttempt) {
+        await this.handleGenerationFailure(job.data.musicId, job.data.userId);
 
-      // Emit failure event
-      const failedEvent: MusicGenerationFailedEvent = {
-        data: {
-          musicId: job.data.musicId,
-          userId: job.data.userId,
-          error: error.message,
-          failedAt: new Date().toISOString(),
-        },
-      };
+        // Emit failure event only on final failure
+        const failedEvent: MusicGenerationFailedEvent = {
+          data: {
+            musicId: job.data.musicId,
+            userId: job.data.userId,
+            error: error.message,
+            failedAt: new Date().toISOString(),
+          },
+        };
 
-      this.eventEmitter.emit('music.generation.failed', failedEvent);
-      this.logger.log(
-        `📤 Emitted music.generation.failed event for music ID: ${job.data.musicId}`,
-      );
+        this.eventEmitter.emit('music.generation.failed', failedEvent);
+        this.logger.log(
+          `📤 Emitted music.generation.failed event for music ID: ${job.data.musicId} (final attempt)`,
+        );
+      } else {
+        this.logger.log(
+          `🔄 Retry attempt ${job.attemptsMade + 1}/${job.opts.attempts} for music ID: ${job.data.musicId}`,
+        );
+      }
 
       throw error; // BullMQ will handle retries
     }
@@ -156,44 +163,56 @@ export class MusicGenerationProcessor extends WorkerHost {
       // Get user by clerkId to get their database ID
       const user = await this.usersService.getUserByClerkId(clerkId);
 
-      // Get the music record to check credits used
-      const music = await this.prismaService.music.findUnique({
-        where: { id: musicId },
-        select: {
-          creditsUsed: true,
-          name: true,
-        },
-      });
+      // Atomic refund operation with idempotency protection
+      await this.prismaService.$transaction(async (tx) => {
+        // Get the music record to check current status and credits
+        const music = await tx.music.findUnique({
+          where: { id: musicId },
+          select: {
+            creditsUsed: true,
+            name: true,
+            status: true,
+          },
+        });
 
-      if (!music) {
-        this.logger.error(`❌ Music record not found for ID: ${musicId}`);
-        return;
-      }
+        if (!music) {
+          this.logger.error(`❌ Music record not found for ID: ${musicId}`);
+          return;
+        }
 
-      const creditsToRefund = Number(music.creditsUsed);
+        // Idempotency check: if already FAILED, we've already processed this
+        if (music.status === 'FAILED') {
+          this.logger.log(
+            `⚠️ Music ID ${musicId} already marked as FAILED, skipping refund`,
+          );
+          return;
+        }
 
-      // Only refund if credits were actually deducted (> 0)
-      if (creditsToRefund > 0) {
-        // Use CreditsService to handle refund
-        await this.creditsService.refundCredits(
-          user.id,
-          creditsToRefund,
-          `Refund for failed generation: ${music.name}`,
-        );
+        const creditsToRefund = Number(music.creditsUsed);
 
-        this.logger.log(
-          `💰 Refunded ${creditsToRefund} credits to user ${clerkId} for failed music generation`,
-        );
-      }
+        // Only refund if credits were actually deducted (> 0)
+        if (creditsToRefund > 0) {
+          // Use CreditsService to handle refund
+          await this.creditsService.refundCredits(
+            user.id,
+            creditsToRefund,
+            `Refund for failed generation: ${music.name}`,
+          );
 
-      // Update music record: set status to FAILED and reset creditsUsed to 0
-      await this.prismaService.music.update({
-        where: { id: musicId },
-        data: {
-          status: 'FAILED',
-          creditsUsed: 0, // Reset to 0 since refunded
-          updatedAt: new Date(),
-        },
+          this.logger.log(
+            `💰 Refunded ${creditsToRefund} credits to user ${clerkId} for failed music generation`,
+          );
+        }
+
+        // Update music record: set status to FAILED and reset creditsUsed to 0
+        await tx.music.update({
+          where: { id: musicId },
+          data: {
+            status: 'FAILED',
+            creditsUsed: 0, // Reset to 0 since refunded
+            updatedAt: new Date(),
+          },
+        });
       });
 
       this.logger.log(

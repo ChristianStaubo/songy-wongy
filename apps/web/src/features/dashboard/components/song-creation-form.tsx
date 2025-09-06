@@ -2,7 +2,7 @@
 
 import { useForm, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { GenerateMusicDto, generateMusicDto } from "@repo/types";
+import { GenerateMusicDto, generateMusicSchema } from "@repo/types";
 import {
   Card,
   CardContent,
@@ -34,7 +34,7 @@ export function SongCreationForm({ credits }: SongCreationFormProps) {
     setValue,
     reset,
   } = useForm<FormData>({
-    resolver: zodResolver(generateMusicDto),
+    resolver: zodResolver(generateMusicSchema),
     defaultValues: {
       name: "",
       prompt: "",

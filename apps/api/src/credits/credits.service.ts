@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AIProvider, Transaction } from '@prisma/client';
+import { AIProvider, Transaction, Prisma } from '@prisma/client';
 import { InsufficientCreditsException } from './exceptions/insufficient-credits.exception';
 
 @Injectable()
@@ -78,44 +78,64 @@ export class CreditsService {
     description: string,
   ): Promise<Transaction> {
     return await this.prismaService.$transaction(async (tx) => {
-      // Check user has sufficient credits (lock user row for update)
-      const userWithBalance = await tx.user.findUnique({
-        where: { id: userId },
-        select: { creditBalance: true },
-      });
-
-      if (!userWithBalance) {
-        throw new Error('User not found');
-      }
-
-      const currentBalance = Number(userWithBalance.creditBalance);
-      if (currentBalance < creditsNeeded) {
-        throw new InsufficientCreditsException(creditsNeeded, currentBalance);
-      }
-
-      // Create deduction transaction
-      const transaction = await tx.transaction.create({
-        data: {
-          userId,
-          type: 'DEDUCTION',
-          amount: -creditsNeeded,
-          description,
-          status: 'COMPLETED',
-        },
-      });
-
-      // Update cached credit balance
-      await tx.user.update({
-        where: { id: userId },
-        data: { creditBalance: { decrement: creditsNeeded } },
-      });
-
-      this.logger.log(
-        `✅ Deducted ${creditsNeeded} credits from user ${userId}: ${description}`,
+      return await this.deductCreditsWithTx(
+        tx,
+        userId,
+        creditsNeeded,
+        description,
       );
-
-      return transaction;
     });
+  }
+
+  /**
+   * Deduct credits using an existing transaction context
+   * Used when credit deduction needs to be part of a larger atomic operation
+   */
+  async deductCreditsWithTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    creditsNeeded: number,
+    description: string,
+  ): Promise<Transaction> {
+    // Check user has sufficient credits (lock user row for update)
+    // Use raw query with FOR UPDATE to prevent race conditions
+    const userWithBalance = await tx.$queryRaw<{ creditBalance: number }[]>`
+      SELECT "creditBalance" FROM "User" 
+      WHERE id = ${userId} 
+      FOR UPDATE
+    `.then((rows) => rows[0]);
+
+    if (!userWithBalance) {
+      throw new Error('User not found');
+    }
+
+    const currentBalance = Number(userWithBalance.creditBalance);
+    if (currentBalance < creditsNeeded) {
+      throw new InsufficientCreditsException(creditsNeeded, currentBalance);
+    }
+
+    // Create deduction transaction
+    const transaction = await tx.transaction.create({
+      data: {
+        userId,
+        type: 'DEDUCTION',
+        amount: -creditsNeeded,
+        description,
+        status: 'COMPLETED',
+      },
+    });
+
+    // Update cached credit balance
+    await tx.user.update({
+      where: { id: userId },
+      data: { creditBalance: { decrement: creditsNeeded } },
+    });
+
+    this.logger.log(
+      `✅ Deducted ${creditsNeeded} credits from user ${userId}: ${description}`,
+    );
+
+    return transaction;
   }
 
   /**
