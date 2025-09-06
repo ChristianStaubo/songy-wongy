@@ -24,6 +24,65 @@ This Turborepo monorepo shares types across all platforms to prevent API drift a
 - **Code Reuse**: Frontend and mobile share React Query hooks and business logic
 - **Unified State Management**: Consistent data fetching and caching across platforms
 
+## Shared Validation Pattern
+
+This project demonstrates a clean pattern for sharing Zod schemas and types across frontend and backend without framework coupling:
+
+### Pattern Overview
+
+```typescript
+// packages/types/src/music/dto/generate-music.dto.ts
+import { z } from "zod";
+
+// Single source of truth - framework-agnostic Zod schema
+export const generateMusicSchema = z.object({
+  name: z.string().min(1).max(100),
+  prompt: z.string().min(1).max(2000),
+  lengthMs: z.number().int().min(10000).max(300000).optional(),
+});
+
+// TypeScript type for all consumers
+export type GenerateMusicDto = z.infer<typeof generateMusicSchema>;
+```
+
+### Frontend Usage (React Hook Form)
+
+```typescript
+// apps/web/src/features/dashboard/components/song-creation-form.tsx
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { generateMusicSchema, GenerateMusicDto } from "@repo/types";
+
+const form = useForm<GenerateMusicDto>({
+  resolver: zodResolver(generateMusicSchema), // Client-side validation
+});
+```
+
+### Backend Usage (NestJS Controller)
+
+```typescript
+// apps/api/src/music-generator/music-generator.controller.ts
+import { generateMusicSchema } from '@repo/types';
+import { createZodDto } from 'nestjs-zod';
+
+// Create NestJS DTO class with Zod validation (backend only)
+// Frontend uses the exported type and schema directly from @repo/types
+class GenerateMusicDto extends createZodDto(generateMusicSchema) {}
+
+@Post('generate')
+async generateMusic(@Body() dto: GenerateMusicDto) {
+  // Automatic server-side validation with proper error responses
+}
+```
+
+### Benefits
+
+- **🎯 Single Source of Truth**: One schema definition, used everywhere
+- **🚫 No Framework Leakage**: Frontend never imports NestJS dependencies
+- **✅ Full Type Safety**: TypeScript types work across all apps
+- **🔄 Automatic Sync**: Schema changes automatically propagate everywhere
+- **📝 Consistent Validation**: Same rules on client and server
+
 ## Development
 
 ### Prerequisites
