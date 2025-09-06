@@ -19,7 +19,12 @@ import {
 import { MusicGeneratorService } from './music-generator.service';
 import { ClerkAuthGuard } from 'src/auth/guards/clerk-auth-guard';
 import { GetClerkId } from 'src/auth/decorators/get-clerk-id-decorator';
-import { GenerateMusicDto, GetUserMusicDto } from '@repo/types';
+import { generateMusicSchema, GetUserMusicDto } from '@repo/types';
+import { createZodDto } from 'nestjs-zod';
+
+// Create NestJS DTO class with Zod validation (backend only)
+// Frontend uses the exported type and schema directly from @repo/types
+class GenerateMusicDto extends createZodDto(generateMusicSchema) {}
 
 @ApiTags('Music Generation')
 @Controller('music-generator')
@@ -107,13 +112,27 @@ export class MusicGeneratorController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad request - invalid prompt or length',
+    description: 'Bad request - invalid input or insufficient credits',
     schema: {
       type: 'object',
       properties: {
-        message: { type: 'string' },
-        error: { type: 'string' },
-        statusCode: { type: 'number' },
+        message: {
+          type: 'string',
+          example: 'Insufficient credits to complete this operation',
+        },
+        error: {
+          type: 'string',
+          example: 'INSUFFICIENT_CREDITS',
+        },
+        statusCode: { type: 'number', example: 400 },
+        details: {
+          type: 'object',
+          properties: {
+            required: { type: 'number', example: 2 },
+            available: { type: 'number', example: 0 },
+            shortfall: { type: 'number', example: 2 },
+          },
+        },
       },
     },
   })

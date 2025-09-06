@@ -51,7 +51,7 @@ async function bootstrap() {
     )
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, cleanupOpenApiDoc(document));
+  SwaggerModule.setup('api/docs', app, cleanupOpenApiDoc(document));
   app.useLogger(app.get(Logger));
 
   // app.useGlobalPipes(

@@ -6,6 +6,8 @@ import { MUSIC_GENERATION_QUEUE } from '../queue.constants';
 import { GenerateMusicJobData } from '../types';
 import { MusicGeneratorService } from '../../music-generator/music-generator.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UsersService } from '../../users/users.service';
+import { CreditsService } from '../../credits/credits.service';
 import {
   MusicGenerationCompletedEvent,
   MusicGenerationFailedEvent,
@@ -18,6 +20,8 @@ export class MusicGenerationProcessor extends WorkerHost {
   constructor(
     private readonly musicGeneratorService: MusicGeneratorService,
     private readonly prismaService: PrismaService,
+    private readonly usersService: UsersService,
+    private readonly creditsService: CreditsService,
     private readonly eventEmitter: EventEmitter2,
   ) {
     super();
@@ -36,8 +40,8 @@ export class MusicGenerationProcessor extends WorkerHost {
         error.message,
       );
 
-      // Update database status to FAILED
-      await this.updateMusicStatus(job.data.musicId, 'FAILED');
+      // Handle credit refund and status update in atomic transaction
+      await this.handleGenerationFailure(job.data.musicId, job.data.userId);
 
       // Emit failure event
       const failedEvent: MusicGenerationFailedEvent = {
@@ -137,6 +141,70 @@ export class MusicGenerationProcessor extends WorkerHost {
         error.message,
       );
       // Don't throw here, as this is a secondary operation
+    }
+  }
+
+  /**
+   * Handle music generation failure by refunding credits and updating status
+   */
+  private async handleGenerationFailure(musicId: string, clerkId: string) {
+    try {
+      this.logger.log(
+        `🔄 Handling generation failure for music ID: ${musicId}`,
+      );
+
+      // Get user by clerkId to get their database ID
+      const user = await this.usersService.getUserByClerkId(clerkId);
+
+      // Get the music record to check credits used
+      const music = await this.prismaService.music.findUnique({
+        where: { id: musicId },
+        select: {
+          creditsUsed: true,
+          name: true,
+        },
+      });
+
+      if (!music) {
+        this.logger.error(`❌ Music record not found for ID: ${musicId}`);
+        return;
+      }
+
+      const creditsToRefund = Number(music.creditsUsed);
+
+      // Only refund if credits were actually deducted (> 0)
+      if (creditsToRefund > 0) {
+        // Use CreditsService to handle refund
+        await this.creditsService.refundCredits(
+          user.id,
+          creditsToRefund,
+          `Refund for failed generation: ${music.name}`,
+        );
+
+        this.logger.log(
+          `💰 Refunded ${creditsToRefund} credits to user ${clerkId} for failed music generation`,
+        );
+      }
+
+      // Update music record: set status to FAILED and reset creditsUsed to 0
+      await this.prismaService.music.update({
+        where: { id: musicId },
+        data: {
+          status: 'FAILED',
+          creditsUsed: 0, // Reset to 0 since refunded
+          updatedAt: new Date(),
+        },
+      });
+
+      this.logger.log(
+        `📝 Updated music ID ${musicId} status to FAILED and reset credits`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `❌ Failed to handle generation failure for music ID ${musicId}:`,
+        error.message,
+      );
+      // Don't throw here - this is cleanup, main error should still propagate
     }
   }
 }

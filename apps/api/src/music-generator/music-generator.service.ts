@@ -12,6 +12,7 @@ import { Readable } from 'stream';
 import { S3Service } from '../s3/s3.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
+import { CreditsService } from '../credits/credits.service';
 import { MusicGenerationRequestedEvent } from '../workers/events/music-generation-event';
 
 @Injectable()
@@ -26,6 +27,7 @@ export class MusicGeneratorService {
     private s3Service: S3Service,
     private prismaService: PrismaService,
     private usersService: UsersService,
+    private creditsService: CreditsService,
     private eventEmitter: EventEmitter2,
   ) {
     this.apiKey = this.configService.get<string>('ELEVENLABS_API_KEY');
@@ -57,27 +59,23 @@ export class MusicGeneratorService {
     // Get user by clerkId to get their database ID
     const user = await this.usersService.getUserByClerkId(clerkId);
 
-    // Calculate estimated credits needed (1 credit per minute, rounded up)
-    const estimatedCredits = Math.ceil((options.lengthMs || 10000) / 60000);
+    // Calculate credits needed using CreditsService
+    const lengthMs = options.lengthMs || 10000;
+    const creditsNeeded = await this.creditsService.calculateCreditsNeeded(
+      lengthMs,
+      'ELEVENLABS',
+    );
 
-    // TODO: Implement credit balance validation and deduction transaction creation
-    // - Check if user has sufficient credits
-    // - Create DEDUCTION transaction
-    // - Link transaction to music record
+    // Note: CreditsService.deductCredits() will automatically check balance
+    // and throw InsufficientCreditsException if user doesn't have enough credits
 
-    // Create Music record in database using the user's database ID
-    const musicRecord = await this.prismaService.music.create({
-      data: {
-        name: options.name,
-        prompt: options.prompt,
-        lengthMs: options.lengthMs || 10000, // Default to 10 seconds
-        status: 'GENERATING',
-        audioUrl: null, // Will be updated by worker when generation completes
-        userId: user.id, // Use the database ID, not clerkId
-        creditsUsed: estimatedCredits,
-        // transactionId will be set when credit deduction transaction is created
-      },
-    });
+    // Atomic transaction: deduct credits and create music record
+    const musicRecord = await this.createMusicWithDeduction(
+      user,
+      options,
+      lengthMs,
+      creditsNeeded,
+    );
 
     this.logger.log(`Created music record with ID: ${musicRecord.id}`);
 
@@ -110,6 +108,44 @@ export class MusicGeneratorService {
     };
 
     return response;
+  }
+
+  /**
+   * Create music record with credit deduction in atomic transaction
+   */
+  private async createMusicWithDeduction(
+    user: { id: string },
+    options: GenerateMusicDto,
+    lengthMs: number,
+    creditsNeeded: number,
+  ) {
+    // Deduct credits first (this runs in its own transaction)
+    const transaction = await this.creditsService.deductCredits(
+      user.id,
+      creditsNeeded,
+      `Music generation: ${options.name}`,
+    );
+
+    // Create music record linked to transaction
+    const music = await this.prismaService.music.create({
+      data: {
+        name: options.name,
+        prompt: options.prompt,
+        lengthMs: lengthMs,
+        status: 'GENERATING',
+        audioUrl: null, // Will be updated by worker when generation completes
+        userId: user.id,
+        creditsUsed: creditsNeeded,
+        provider: 'ELEVENLABS',
+        transactionId: transaction.id,
+      },
+    });
+
+    this.logger.log(
+      `✅ Credits deducted and music record created: ${creditsNeeded} credits for music ID ${music.id}`,
+    );
+
+    return music;
   }
 
   /**

@@ -4,12 +4,16 @@ This document describes the complete end-to-end flow for generating music using 
 
 ## 🎵 Overview
 
-The music generation system uses an **asynchronous workflow** with worker queues to handle long-running ElevenLabs API calls without blocking HTTP requests. The complete flow involves:
+The music generation system uses an **asynchronous workflow** with worker queues to handle long-running ElevenLabs API calls without blocking HTTP requests. The system now includes a **credit-based payment system** with full transaction auditing.
 
-1. **Job Creation** - User requests music generation
-2. **Background Processing** - Worker queue processes the request
-3. **Status Polling** - User checks generation progress
-4. **File Access** - User downloads the completed music file
+The complete flow involves:
+
+1. **Credit Validation** - Check user has sufficient credits
+2. **Job Creation** - User requests music generation
+3. **Credit Deduction** - Create transaction and deduct credits
+4. **Background Processing** - Worker queue processes the request
+5. **Status Polling** - User checks generation progress
+6. **File Access** - User downloads the completed music file
 
 ---
 
@@ -54,9 +58,10 @@ The music generation system uses an **asynchronous workflow** with worker queues
 
 1. Controller validates request (Zod schemas)
 2. Service looks up user by `clerkId` → gets database `user.id`
-3. Service creates `Music` record in database (status: `GENERATING`)
-4. Service emits `music.generation.requested` event
-5. Returns `musicId` for polling
+3. **Credit validation and deduction** (see Credit Flow section below)
+4. Service creates `Music` record in database (status: `GENERATING`)
+5. Service emits `music.generation.requested` event
+6. Returns `musicId` for polling
 
 ---
 
@@ -195,28 +200,254 @@ GET /api/music-generator/download/:musicId
 
 ---
 
+## 💳 Credit System Integration
+
+### **Credit Validation & Deduction Flow**
+
+Before any music generation begins, the system validates and deducts credits:
+
+```typescript
+// Step 1: Calculate required credits
+const estimatedCredits = Math.ceil(lengthMs / 60000); // 1 credit per minute, rounded up
+
+// Step 2: Get current pricing for provider
+const pricingTier = await prisma.pricingTier.findFirst({
+  where: { provider: 'ELEVENLABS', isDefault: true },
+});
+
+const actualCreditsNeeded =
+  Math.ceil(lengthMs / 60000) * pricingTier.creditsPerMinute;
+
+// Step 3: Atomic credit deduction transaction
+await prisma.$transaction(async (tx) => {
+  // Check user has sufficient credits
+  const user = await tx.user.findUnique({
+    where: { id: userId },
+    select: { creditBalance: true },
+  });
+
+  if (user.creditBalance < actualCreditsNeeded) {
+    throw new Error('Insufficient credits');
+  }
+
+  // Create deduction transaction
+  const transaction = await tx.transaction.create({
+    data: {
+      userId,
+      type: 'DEDUCTION',
+      amount: -actualCreditsNeeded,
+      description: `Music generation: ${name}`,
+      status: 'COMPLETED',
+    },
+  });
+
+  // Create music record linked to transaction
+  const music = await tx.music.create({
+    data: {
+      name,
+      prompt,
+      lengthMs,
+      userId,
+      creditsUsed: actualCreditsNeeded,
+      provider: 'ELEVENLABS',
+      transactionId: transaction.id,
+      status: 'GENERATING',
+    },
+  });
+
+  // Update cached credit balance
+  await tx.user.update({
+    where: { id: userId },
+    data: { creditBalance: { decrement: actualCreditsNeeded } },
+  });
+
+  return music;
+});
+```
+
+### **Credit Refund on Failure**
+
+If music generation fails, credits are automatically refunded:
+
+```typescript
+// In MusicGenerationProcessor on failure
+await prisma.$transaction(async (tx) => {
+  // Create refund transaction
+  const refundTransaction = await tx.transaction.create({
+    data: {
+      userId,
+      type: 'REFUND',
+      amount: originalCreditsUsed,
+      description: `Refund for failed generation: ${musicId}`,
+      status: 'COMPLETED',
+    },
+  });
+
+  // Update music record
+  await tx.music.update({
+    where: { id: musicId },
+    data: {
+      status: 'FAILED',
+      creditsUsed: 0, // Reset to 0 since refunded
+    },
+  });
+
+  // Update cached balance
+  await tx.user.update({
+    where: { id: userId },
+    data: { creditBalance: { increment: originalCreditsUsed } },
+  });
+});
+```
+
+### **Pricing Flexibility**
+
+The system supports dynamic pricing per AI provider:
+
+```sql
+-- Current pricing (1.0 credits per minute for ElevenLabs)
+SELECT * FROM "PricingTier" WHERE provider = 'ELEVENLABS' AND "isDefault" = true;
+
+-- Future: Add cheaper self-hosted option
+INSERT INTO "PricingTier" (provider, name, "creditsPerMinute", "isDefault")
+VALUES ('SELFHOSTED', 'Slow Generation', 0.5, true);
+```
+
+---
+
 ## 🏗️ Architecture Components
 
 ### **Database Schema**
 
 ```prisma
+model User {
+  id              String    @id @default(cuid())
+  clerkId         String    @unique
+  email           String?   @unique
+  name            String?
+  creditBalance   Decimal   @default(0) @db.Decimal(10, 4) // CACHED credit balance
+  freeTrialUsedAt DateTime? // When free trial was used (null = not used yet)
+  deletedAt       DateTime? // Soft delete timestamp
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  music        Music[]
+  transactions Transaction[]
+}
+
 model Music {
-  id       String      @id @default(cuid())
-  name     String      // User-provided name
-  prompt   String      // Generation prompt
-  audioUrl String      // S3 URL to the MP3 file
-  lengthMs Int         // Length in milliseconds
-  status   MusicStatus @default(GENERATING)
-  userId   String      // References User.id (not clerkId!)
-  user     User        @relation(fields: [userId], references: [id])
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id           String      @id @default(cuid())
+  name         String      // User-provided name
+  prompt       String      // Generation prompt
+  audioUrl     String?     // S3 URL to the MP3 file (nullable until generation completes)
+  thumbnailUrl String?     // S3 URL to thumbnail (MVP2)
+  lengthMs     Int?        // Length in milliseconds (nullable until generation completes)
+  status       MusicStatus @default(GENERATING)
+  creditsUsed  Decimal     @db.Decimal(10, 4) // Credits deducted for this generation
+  provider     AIProvider  @default(ELEVENLABS) // Which AI provider was used
+
+  // User relationship
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Transaction relationship (for auditing) - 1:1 for MVP1
+  transactionId String? @unique
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+
+  // Metadata for debugging (API responses, error details, etc.)
+  metadata Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Transaction {
+  id          String            @id @default(cuid())
+  type        TransactionType
+  amount      Decimal @db.Decimal(10, 4) // Credits involved (positive for purchases/refunds, negative for deductions)
+  description String            // Human-readable description
+  status      TransactionStatus @default(PENDING)
+
+  // User relationship - DON'T cascade delete transactions (preserve audit trail)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  // Related entities
+  music     Music? // For deduction transactions (1:1 for MVP1)
+  productId String? // For purchase transactions
+  product   Product? @relation(fields: [productId], references: [id])
+
+  // Payment details (for purchases)
+  stripePaymentIntentId String? // Stripe payment intent ID
+  stripeWebhookId       String? // For webhook deduplication
+  amountPaidCents       Int?    // Amount paid in cents (USD)
+
+  // Metadata
+  metadata  Json? // Additional data (Stripe responses, error details, etc.)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id          String  @id @default(cuid())
+  name        String  // e.g., "Starter Pack"
+  description String? // Optional description
+  credits     Decimal @db.Decimal(10, 4) // Number of credits in this package
+  priceUsd    Int     // Price in USD cents
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0) // For display ordering
+
+  // Stripe integration
+  stripePriceId   String? @unique // Stripe price ID
+  stripeProductId String? @unique // Stripe product ID
+
+  // Relations
+  transactions Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PricingTier {
+  id          String     @id @default(cuid())
+  provider    AIProvider
+  name        String     // e.g., "Fast Generation", "Slow Generation"
+  description String?    // Optional description
+
+  // Pricing structure - used for runtime cost calculation
+  creditsPerMinute Decimal @db.Decimal(10, 4) // How many credits per minute of audio
+  isActive         Boolean @default(true)
+  isDefault        Boolean @default(false) // Default option for this provider
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, isDefault]) // Only one default per provider
 }
 
 enum MusicStatus {
   GENERATING  // Currently being generated
   COMPLETED   // Successfully generated and uploaded
   FAILED      // Generation or upload failed
+}
+
+enum AIProvider {
+  ELEVENLABS  // ElevenLabs API (fast, higher cost)
+  SELFHOSTED  // Self-hosted model (slow, lower cost) - MVP2
+}
+
+enum TransactionType {
+  PURCHASE    // Credit purchase
+  DEDUCTION   // Credit deduction for music generation
+  REFUND      // Credit refund (failed generation, etc.)
+  TRIAL       // Free trial credit
+}
+
+enum TransactionStatus {
+  PENDING     // Transaction initiated but not confirmed
+  COMPLETED   // Transaction completed successfully
+  FAILED      // Transaction failed
+  CANCELLED   // Transaction cancelled
 }
 ```
 
@@ -409,14 +640,71 @@ aws s3 ls s3://songy-wongy-music/music/FILENAME.mp3
 
 ### **Future Enhancements**
 
-- [ ] User credit/permission validation
-- [ ] Batch music generation
-- [ ] Music file expiration/cleanup
-- [ ] Webhook notifications for completion
-- [ ] Real-time status updates via WebSocket
-- [ ] Music file transcoding/format conversion
-- [ ] Playlist management integration
+#### **MVP2 Features**
+
+- [ ] **Self-hosted AI Provider**: Add cheaper, slower music generation option
+- [ ] **Auto-generated Thumbnails**: Visual representations of music
+- [ ] **Finer Credit Increments**: 1 credit = 30s instead of 1 minute
+- [ ] **Subscription Plans**: Monthly bundles at discounted rates
+
+#### **Technical Improvements**
+
+- [ ] **Batch Music Generation**: Generate multiple songs in one request
+- [ ] **Music File Expiration**: Automatic cleanup of old files
+- [ ] **Real-time Status Updates**: WebSocket notifications for completion
+- [ ] **Webhook Notifications**: External system integration
+- [ ] **Music File Transcoding**: Multiple format support
+- [ ] **Playlist Management**: User-created playlists
+
+#### **Credit System Enhancements**
+
+- [ ] **Credit Purchase API**: Stripe integration for buying credits
+- [ ] **Free Trial Implementation**: Automatic 1 credit on signup
+- [ ] **Credit History**: Transaction audit trail for users
+- [ ] **Usage Analytics**: Track credit consumption patterns
+- [ ] **Promotional Credits**: Marketing campaigns and referrals
+
+## 🚧 Current Implementation Status
+
+### **✅ Completed (MVP1 Foundation)**
+
+- [x] **Database Schema**: Complete credit system schema implemented
+- [x] **Music Generation**: Async workflow with worker queues
+- [x] **User Authentication**: Clerk integration with user lookup
+- [x] **S3 Storage**: Audio file upload and management
+- [x] **Status Polling**: Real-time generation progress tracking
+- [x] **Error Handling**: Automatic retries and failure management
+
+### **🔄 In Progress**
+
+- [ ] **Credit Validation**: Implement credit checking before generation
+- [ ] **Transaction Creation**: Link music generation to credit deductions
+- [ ] **Credit Refunds**: Automatic refunds on generation failure
+
+### **📋 Next Implementation Steps**
+
+#### **Phase 1: Credit Integration**
+
+1. **Update `requestMusicGeneration`** to validate credits and create transactions
+2. **Modify `MusicGenerationProcessor`** to handle credit refunds on failure
+3. **Add credit balance checks** to prevent insufficient credit requests
+
+#### **Phase 2: Credit Purchase System**
+
+1. **Create Products Controller**: Manage credit bundles
+2. **Implement Stripe Integration**: Checkout and webhook handling
+3. **Add Transaction History**: User-facing credit audit trail
+
+#### **Phase 3: User Experience**
+
+1. **Frontend Credit Display**: Show balance and transaction history
+2. **Purchase Flow UI**: Credit bundle selection and checkout
+3. **Free Trial Implementation**: Automatic credit on signup
+
+### **🔧 Implementation Reference**
+
+When implementing credit features, use the code examples in the **Credit System Integration** section above as the foundation. The database schema is already in place and ready for the credit system implementation.
 
 ---
 
-_Last Updated: September 1, 2024_
+_Last Updated: September 5, 2024_

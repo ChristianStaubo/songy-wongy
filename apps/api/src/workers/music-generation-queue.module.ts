@@ -9,12 +9,16 @@ import { MusicGenerationProcessor } from './processors/music-generation.processo
 import { MusicGenerationListener } from './listeners/music-generation.listener';
 import { MusicGeneratorModule } from '../music-generator/music-generator.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { UsersModule } from '../users/users.module';
+import { CreditsModule } from '../credits/credits.module';
 
 @Module({
   imports: [
     ConfigModule,
     MusicGeneratorModule,
     PrismaModule,
+    UsersModule,
+    CreditsModule,
     BullModule.registerQueue({
       name: MUSIC_GENERATION_QUEUE,
       defaultJobOptions: DEFAULT_MUSIC_GENERATION_JOB_OPTIONS,

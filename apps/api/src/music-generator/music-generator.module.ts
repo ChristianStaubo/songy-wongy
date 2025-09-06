@@ -4,9 +4,10 @@ import { MusicGeneratorService } from './music-generator.service';
 import { S3Module } from '../s3/s3.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { UsersModule } from '../users/users.module';
+import { CreditsModule } from '../credits/credits.module';
 
 @Module({
-  imports: [S3Module, PrismaModule, UsersModule],
+  imports: [S3Module, PrismaModule, UsersModule, CreditsModule],
   controllers: [MusicGeneratorController],
   providers: [MusicGeneratorService],
   exports: [MusicGeneratorService],
